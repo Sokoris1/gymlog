@@ -115,7 +115,8 @@ export default function WorkoutPage() {
           <div className="space-y-2">
             {workouts.map((w: any) => (
               <div key={w.id} data-testid={`history-workout-${w.id}`}
-                className="bg-card border border-card-border rounded-2xl p-3 flex items-center gap-3">
+                onClick={() => navigate(`/workout/${w.id}`)}
+                className="bg-card border border-card-border rounded-2xl p-3 flex items-center gap-3 cursor-pointer hover-elevate active-elevate">
                 <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
                   <Dumbbell size={18} className="text-primary" />
                 </div>
@@ -127,10 +128,11 @@ export default function WorkoutPage() {
                       {format(parseISO(w.date + "T00:00:00"), "EEEE, d MMM", { locale })}
                     </span>
                     {w.durationMinutes && (
-                      <span className="flex items-center gap-1"><Clock size={10} />{w.durationMinutes}m</span>
+                      <span className="flex items-center gap-1"><Clock size={10} />{w.durationMinutes}м</span>
                     )}
                   </div>
                 </div>
+                <ChevronRight size={14} className="text-muted-foreground flex-shrink-0" />
               </div>
             ))}
           </div>

@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Dumbbell, TrendingUp, Trophy, Calendar, ChevronRight, Plus, Clock, Flame, Sun, Moon } from "lucide-react";
+import { useLocation } from "wouter";
 import { useAuth, useTheme, useLang } from "@/App";
 import { t } from "@/lib/i18n";
 import { apiRequest } from "@/lib/queryClient";
@@ -13,6 +14,7 @@ export default function HomePage() {
   const { isDark, toggle } = useTheme();
   const { lang } = useLang();
   const locale = lang === "ru" ? dateFnsRu : undefined;
+  const [, navigate] = useLocation();
 
   const { data: statsData, isLoading: statsLoading } = useQuery({
     queryKey: ["/api/users", userId, "stats"],
@@ -120,7 +122,8 @@ export default function HomePage() {
           <div className="space-y-2">
             {recentWorkouts.map((w: any) => (
               <div key={w.id} data-testid={`workout-card-${w.id}`}
-                className="bg-card border border-card-border rounded-2xl p-3 flex items-center gap-3">
+                onClick={() => navigate(`/workout/${w.id}`)}
+                className="bg-card border border-card-border rounded-2xl p-3 flex items-center gap-3 cursor-pointer hover-elevate active-elevate">
                 <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
                   <Dumbbell size={18} className="text-primary" />
                 </div>

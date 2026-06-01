@@ -16,6 +16,7 @@ import ProfilePage from "@/pages/profile";
 import ExercisesPage from "@/pages/exercises";
 import ProgressPage from "@/pages/progress";
 import TemplatesPage from "@/pages/templates";
+import WorkoutDetailPage from "@/pages/workout-detail";
 import BottomNav from "@/components/BottomNav";
 import NotFound from "@/pages/not-found";
 
@@ -56,6 +57,7 @@ function AppRoutes() {
           <Route path="/" component={HomePage} />
           <Route path="/workout" component={WorkoutPage} />
           <Route path="/workout/active/:id" component={ActiveWorkoutPage} />
+          <Route path="/workout/:id" component={WorkoutDetailPage} />
           <Route path="/calendar" component={CalendarPage} />
           <Route path="/friends" component={FriendsPage} />
           <Route path="/profile" component={ProfilePage} />

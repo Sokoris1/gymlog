@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { setActiveWorkout } from "@/lib/store";
 import { useToast } from "@/hooks/use-toast";
+import { exerciseNameRu } from "@/lib/exerciseNames";
 
 function useTimer(running: boolean) {
   const [seconds, setSeconds] = useState(0);
@@ -245,7 +246,7 @@ export default function ActiveWorkoutPage() {
                 onClick={() => addExercise.mutate({ workoutId, exerciseId: ex.id, order: workoutExercises.length })}
                 className="w-full bg-background border border-border rounded-xl p-3 flex items-center gap-2 hover-elevate text-left">
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-sm truncate">{ex.name}</div>
+                  <div className="font-medium text-sm truncate">{lang === "ru" ? (exerciseNameRu[ex.name] ?? ex.name) : ex.name}</div>
                   <div className="text-muted-foreground text-xs capitalize mt-0.5">
                     {muscleLabel(ex.muscleGroup)} · {t(`exercises.equip.${ex.equipment}` as any, lang) || ex.equipment}
                   </div>
@@ -270,7 +271,7 @@ function ExerciseBlock({ workoutExercise: we, lang, onAddSet, onSetComplete, onU
           </span>
         </div>
         <div className="flex-1 min-w-0">
-          <div className="font-semibold text-sm truncate">{we.exercise?.name ?? "Exercise"}</div>
+          <div className="font-semibold text-sm truncate">{lang === "ru" ? (exerciseNameRu[we.exercise?.name ?? ""] ?? we.exercise?.name ?? "Exercise") : (we.exercise?.name ?? "Exercise")}</div>
           <div className="text-muted-foreground text-xs">
             {t(`exercises.muscles.${we.exercise?.muscleGroup}` as any, lang)} · {t(`exercises.equip.${we.exercise?.equipment}` as any, lang)}
           </div>

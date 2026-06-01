@@ -9,6 +9,7 @@ import { format, parseISO } from "date-fns";
 import { ru as dateFnsRu } from "date-fns/locale";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { exerciseNameRu } from "@/lib/exerciseNames";
 
 export default function ProgressPage() {
   const { userId } = useAuth();
@@ -57,13 +58,20 @@ export default function ProgressPage() {
           <div className="space-y-2">
             {prs.map((pr: any) => (
               <button key={pr.id} data-testid={`pr-item-${pr.id}`}
-                onClick={() => { setSelectedExerciseId(pr.exerciseId); setSelectedExerciseName(pr.exercise?.name ?? ""); }}
+                onClick={() => {
+                  setSelectedExerciseId(pr.exerciseId);
+                  setSelectedExerciseName(
+                    lang === "ru" ? (exerciseNameRu[pr.exercise?.name ?? ""] ?? pr.exercise?.name ?? "") : (pr.exercise?.name ?? "")
+                  );
+                }}
                 className="w-full bg-card border border-card-border rounded-2xl p-3 flex items-center gap-3 hover-elevate text-left">
                 <div className="w-10 h-10 rounded-xl bg-yellow-500/10 flex items-center justify-center flex-shrink-0">
                   <Trophy size={18} className="text-yellow-400" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-sm truncate">{pr.exercise?.name ?? "Exercise"}</div>
+                  <div className="font-medium text-sm truncate">
+                    {lang === "ru" ? (exerciseNameRu[pr.exercise?.name ?? ""] ?? pr.exercise?.name ?? "Exercise") : (pr.exercise?.name ?? "Exercise")}
+                  </div>
                   <div className="flex items-center gap-2 mt-0.5">
                     <span className="text-primary font-semibold text-sm">{pr.weight}кг × {pr.reps}</span>
                     <span className={`text-xs ${muscleGroupColors[pr.exercise?.muscleGroup] ?? "text-muted-foreground"}`}>

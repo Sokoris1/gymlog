@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
+import { exerciseNameRu } from "@/lib/exerciseNames";
 
 const muscleGroups = ["chest", "back", "legs", "shoulders", "arms", "core"];
 const equipmentList = ["barbell", "dumbbell", "machine", "bodyweight", "cables"];
@@ -100,7 +101,9 @@ export default function ExercisesPage() {
                 <span className="text-[10px] font-bold uppercase">{ex.muscleGroup.substring(0, 2)}</span>
               </div>
               <div className="flex-1 min-w-0">
-                <div className="font-medium text-sm truncate">{ex.name}</div>
+                <div className="font-medium text-sm truncate">
+                  {lang === "ru" ? (exerciseNameRu[ex.name] ?? ex.name) : ex.name}
+                </div>
                 <div className="text-muted-foreground text-xs">{equipLabel(ex.equipment)}</div>
               </div>
               {ex.isCustom && (
