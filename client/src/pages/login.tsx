@@ -79,35 +79,6 @@ export default function LoginPage() {
           </Button>
         </div>
 
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-border" />
-          </div>
-          <div className="relative flex justify-center text-xs">
-            <span className="bg-background px-3 text-muted-foreground">{t("login.orTryDemo", lang)}</span>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <Button
-            data-testid="button-demo-alex"
-            variant="outline"
-            className="h-10 text-sm border-border"
-            onClick={() => handleLogin("alexp")}
-            disabled={loading}
-          >
-            {t("login.demoAlex", lang)}
-          </Button>
-          <Button
-            data-testid="button-demo-maria"
-            variant="outline"
-            className="h-10 text-sm border-border"
-            onClick={() => handleLogin("mvolkova")}
-            disabled={loading}
-          >
-            {t("login.demomaria", lang)}
-          </Button>
-        </div>
       </div>
     </div>
   );
