@@ -51,6 +51,7 @@ function AppRoutes() {
   const { userId, authLoading } = useAuth();
   const [location] = useLocation();
   const isActiveWorkout = location.startsWith("/workout/active");
+  console.log("[AppRoutes] render, userId:", userId, "authLoading:", authLoading);
 
   // Show login page immediately; overlay spinner while session is being checked
   if (!userId) {
