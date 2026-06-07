@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express, { Response, NextFunction } from 'express';
 import type { Request } from 'express';
+import cookieParser from "cookie-parser";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "node:http";
@@ -13,6 +14,11 @@ declare module "http" {
     rawBody: unknown;
   }
 }
+
+// Cookie secret — use env var in production, fallback for dev
+const COOKIE_SECRET = process.env.COOKIE_SECRET || "gymlog_dev_secret_change_me";
+
+app.use(cookieParser(COOKIE_SECRET));
 
 app.use(
   express.json({
