@@ -2,6 +2,7 @@ import { useState, useCallback, forwardRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth, useLang } from "@/App";
+import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff } from "lucide-react";
 
@@ -96,14 +97,8 @@ export default function LoginPage() {
     if (!u) return;
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/check", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: u }),
-        credentials: "include",
-      });
+      const res = await apiRequest("POST", "/api/auth/check", { username: u });
       const data = await res.json();
-      console.log("[Login] check response:", res.status, data);
       if (!data.exists) {
         setMode("register");
       } else if (!data.hasPassword) {
@@ -123,14 +118,8 @@ export default function LoginPage() {
     if (!password) return;
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: username.trim(), password }),
-        credentials: "include",
-      });
+      const res = await apiRequest("POST", "/api/auth/login", { username: username.trim(), password });
       const data = await res.json();
-      console.log("[Login] login response:", res.status, data);
       if (data.user) {
         login(data.user.id, data.user);
       } else if (data.error === "wrong_credentials") {
@@ -158,11 +147,10 @@ export default function LoginPage() {
     }
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: username.trim(), name: displayName.trim() || username.trim(), password }),
-        credentials: "include",
+      const res = await apiRequest("POST", "/api/auth/register", {
+        username: username.trim(),
+        name: displayName.trim() || username.trim(),
+        password,
       });
       const data = await res.json();
       if (data.user) {
@@ -193,12 +181,7 @@ export default function LoginPage() {
     }
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/set-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: username.trim(), password }),
-        credentials: "include",
-      });
+      const res = await apiRequest("POST", "/api/auth/set-password", { username: username.trim(), password });
       const data = await res.json();
       if (data.user) {
         login(data.user.id, data.user);

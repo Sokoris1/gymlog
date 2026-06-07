@@ -10,36 +10,12 @@ import { insertUserSchema, insertExerciseSchema, insertWorkoutTemplateSchema,
 import { z } from "zod";
 
 const SALT_ROUNDS = 10;
-const COOKIE_SECRET = process.env.COOKIE_SECRET || "gymlog_dev_secret_change_me";
-const COOKIE_NAME = "gymlog_uid";
-// 30 days in ms
-const COOKIE_MAX_AGE = 30 * 24 * 60 * 60 * 1000;
 
 // Strip passwordHash before sending to client
 const safeUser = (u: any) => {
   if (!u) return u;
   const { passwordHash, ...rest } = u;
   return rest;
-};
-
-// Set auth cookie helper
-const setAuthCookie = (res: any, userId: number) => {
-  res.cookie(COOKIE_NAME, String(userId), {
-    signed: true,
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    maxAge: COOKIE_MAX_AGE,
-  });
-};
-
-// Clear auth cookie helper
-const clearAuthCookie = (res: any) => {
-  res.clearCookie(COOKIE_NAME, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-  });
 };
 
 export async function registerRoutes(httpServer: Server, app: Express) {
@@ -68,7 +44,6 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       if (!user.passwordHash) return res.status(400).json({ error: "no_password" }); // should set password first
       const ok = await bcrypt.compare(password, user.passwordHash);
       if (!ok) return res.status(401).json({ error: "wrong_credentials" });
-      setAuthCookie(res, user.id);
       res.json({ user: safeUser(user) });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
@@ -87,7 +62,6 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         passwordHash,
         goal: "general",
       });
-      setAuthCookie(res, user.id);
       res.json({ user: safeUser(user) });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
@@ -102,33 +76,8 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       if (user.passwordHash) return res.status(400).json({ error: "already_has_password" });
       const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
       const updated = await storage.updateUser(user.id, { passwordHash });
-      setAuthCookie(res, updated!.id);
       res.json({ user: safeUser(updated) });
     } catch (e) { res.status(500).json({ error: String(e) }); }
-  });
-
-  // Restore session from cookie
-  app.get("/api/auth/session", async (req, res) => {
-    try {
-      const rawId = (req as any).signedCookies?.[COOKIE_NAME];
-      if (!rawId) return res.status(401).json({ error: "no_session" });
-      const userId = Number(rawId);
-      if (!userId || isNaN(userId)) return res.status(401).json({ error: "invalid_session" });
-      const user = await storage.getUser(userId);
-      if (!user) {
-        clearAuthCookie(res);
-        return res.status(401).json({ error: "user_not_found" });
-      }
-      // Refresh cookie TTL on each session restore
-      setAuthCookie(res, userId);
-      res.json({ user: safeUser(user) });
-    } catch (e) { res.status(500).json({ error: String(e) }); }
-  });
-
-  // Logout — clear cookie
-  app.post("/api/auth/logout", (req, res) => {
-    clearAuthCookie(res);
-    res.json({ ok: true });
   });
 
   // Change password (must know current password)
@@ -170,7 +119,6 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         if (!ok) return res.status(401).json({ error: "wrong_password" });
       }
       await storage.deleteUser(Number(req.params.userId));
-      clearAuthCookie(res);
       res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });

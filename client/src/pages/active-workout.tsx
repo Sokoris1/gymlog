@@ -29,6 +29,27 @@ function formatTime(s: number) {
   return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
 }
 
+// ─── Rest Timer ───────────────────────────────────────────────────────────────
+function RestTimer({ onDismiss, lang }: { onDismiss: () => void; lang: string }) {
+  const [seconds, setSeconds] = useState(90);
+  useEffect(() => {
+    if (seconds <= 0) { onDismiss(); return; }
+    const id = setInterval(() => setSeconds(s => s - 1), 1000);
+    return () => clearInterval(id);
+  }, [seconds]);
+  return (
+    <div className="fixed bottom-24 left-4 right-4 bg-primary text-primary-foreground rounded-2xl p-4 flex items-center justify-between shadow-lg z-50">
+      <div className="flex items-center gap-2">
+        <Timer size={18} />
+        <span className="font-semibold">{t("active.restTimer", lang as any)}: {formatTime(seconds)}</span>
+      </div>
+      <Button variant="ghost" size="sm" className="text-primary-foreground hover:bg-primary-foreground/10" onClick={onDismiss}>
+        {t("active.skip", lang as any)}
+      </Button>
+    </div>
+  );
+}
+
 // ─── Number Input — clears zero on focus, saves on blur ───────────────────────
 function NumInput({ value, onChange, onBlur, placeholder, testId, step, min, max }: {
   value: string; onChange: (v: string) => void; onBlur: () => void;
@@ -233,6 +254,7 @@ export default function ActiveWorkoutPage() {
   const { toast } = useToast();
   const workoutId = Number(params?.id);
   const [showAddExercise, setShowAddExercise] = useState(false);
+  const [showRestTimer, setShowRestTimer] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [muscleFilter, setMuscleFilter] = useState("");
   // Local order state for reordering without server round-trips
@@ -308,6 +330,7 @@ export default function ActiveWorkoutPage() {
 
   const handleSetComplete = (set: any) => {
     updateSet.mutate({ id: set.id, data: { isCompleted: !set.isCompleted } });
+    if (!set.isCompleted) setShowRestTimer(true);
   };
 
   const handleAddSet = (workoutExerciseId: number, currentSets: any[]) => {
@@ -414,6 +437,8 @@ export default function ActiveWorkoutPage() {
           <span className="font-medium text-sm">{t("active.addExercise", lang)}</span>
         </button>
       </div>
+
+      {showRestTimer && <RestTimer lang={lang} onDismiss={() => setShowRestTimer(false)} />}
 
       {/* Bottom Finish Bar */}
       <div className="fixed bottom-0 left-0 right-0 bg-sidebar border-t border-sidebar-border p-4 safe-bottom">
