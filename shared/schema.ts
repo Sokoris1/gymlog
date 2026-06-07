@@ -7,6 +7,7 @@ export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   username: text("username").notNull().unique(),
+  passwordHash: text("password_hash"),  // null = old account without password
   avatar: text("avatar"),
   bodyWeight: real("body_weight"),
   goal: text("goal", { enum: ["strength", "hypertrophy", "weight_loss", "general"] }).default("general"),

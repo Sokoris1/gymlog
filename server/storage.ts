@@ -32,6 +32,7 @@ export interface IStorage {
   getUsers(): Promise<User[]>;
   createUser(data: InsertUser): Promise<User>;
   updateUser(id: number, data: Partial<InsertUser>): Promise<User | undefined>;
+  deleteUser(id: number): Promise<void>;
 
   // Friends
   getFriends(userId: number): Promise<Friend[]>;
@@ -120,6 +121,25 @@ export const storage: IStorage = {
   async updateUser(id, data) {
     const rows = await db.update(users).set(data).where(eq(users.id, id)).returning();
     return rows[0];
+  },
+  async deleteUser(id) {
+    // Delete all user data in order
+    const userWorkouts = await db.select().from(workouts).where(eq(workouts.userId, id));
+    for (const w of userWorkouts) {
+      const wExs = await db.select().from(workoutExercises).where(eq(workoutExercises.workoutId, w.id));
+      for (const we of wExs) {
+        await db.delete(sets).where(eq(sets.workoutExerciseId, we.id));
+      }
+      await db.delete(workoutExercises).where(eq(workoutExercises.workoutId, w.id));
+    }
+    await db.delete(workouts).where(eq(workouts.userId, id));
+    await db.delete(personalRecords).where(eq(personalRecords.userId, id));
+    await db.delete(friends).where(eq(friends.userId, id));
+    await db.delete(friends).where(eq(friends.friendId, id));
+    await db.delete(notifications).where(eq(notifications.userId, id));
+    await db.delete(eventInvites).where(eq(eventInvites.userId, id));
+    await db.delete(trainingEvents).where(eq(trainingEvents.creatorId, id));
+    await db.delete(users).where(eq(users.id, id));
   },
 
   // ─── Friends ──────────────────────────────────────────────────────────────

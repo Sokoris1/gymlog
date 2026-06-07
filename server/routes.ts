@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import type { Server } from "http";
+import bcrypt from "bcryptjs";
 import { storage } from "./storage";
 import { seedDatabase } from "./seed";
 import { insertUserSchema, insertExerciseSchema, insertWorkoutTemplateSchema,
@@ -8,19 +9,117 @@ import { insertUserSchema, insertExerciseSchema, insertWorkoutTemplateSchema,
   insertFriendSchema } from "@shared/schema";
 import { z } from "zod";
 
+const SALT_ROUNDS = 10;
+
+// Strip passwordHash before sending to client
+const safeUser = (u: any) => {
+  if (!u) return u;
+  const { passwordHash, ...rest } = u;
+  return rest;
+};
+
 export async function registerRoutes(httpServer: Server, app: Express) {
   await seedDatabase();
 
-  // ─── Auth (simple, no JWT for demo) ─────────────────────────────────────
-  app.post("/api/auth/login", async (req, res) => {
+  // ─── Auth ────────────────────────────────────────────────────────────────
+
+  // Check if username exists and whether it has a password
+  app.post("/api/auth/check", async (req, res) => {
     try {
       const { username } = req.body;
       if (!username) return res.status(400).json({ error: "Username required" });
-      let user = await storage.getUserByUsername(username);
-      if (!user) {
-        user = await storage.createUser({ name: username, username, goal: "general" });
+      const user = await storage.getUserByUsername(username.trim());
+      if (!user) return res.json({ exists: false });
+      return res.json({ exists: true, hasPassword: !!user.passwordHash });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  // Login with password
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const { username, password } = req.body;
+      if (!username || !password) return res.status(400).json({ error: "Username and password required" });
+      const user = await storage.getUserByUsername(username.trim());
+      if (!user) return res.status(401).json({ error: "wrong_credentials" });
+      if (!user.passwordHash) return res.status(400).json({ error: "no_password" }); // should set password first
+      const ok = await bcrypt.compare(password, user.passwordHash);
+      if (!ok) return res.status(401).json({ error: "wrong_credentials" });
+      res.json({ user: safeUser(user) });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  // Register new account
+  app.post("/api/auth/register", async (req, res) => {
+    try {
+      const { username, name, password } = req.body;
+      if (!username || !password) return res.status(400).json({ error: "Username and password required" });
+      const existing = await storage.getUserByUsername(username.trim());
+      if (existing) return res.status(409).json({ error: "username_taken" });
+      const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+      const user = await storage.createUser({
+        name: (name || username).trim(),
+        username: username.trim(),
+        passwordHash,
+        goal: "general",
+      });
+      res.json({ user: safeUser(user) });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  // Set password for existing account without one (migration flow)
+  app.post("/api/auth/set-password", async (req, res) => {
+    try {
+      const { username, password } = req.body;
+      if (!username || !password) return res.status(400).json({ error: "Username and password required" });
+      const user = await storage.getUserByUsername(username.trim());
+      if (!user) return res.status(404).json({ error: "User not found" });
+      if (user.passwordHash) return res.status(400).json({ error: "already_has_password" });
+      const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+      const updated = await storage.updateUser(user.id, { passwordHash });
+      res.json({ user: safeUser(updated) });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  // Change password (must know current password)
+  app.post("/api/auth/change-password", async (req, res) => {
+    try {
+      const { userId, currentPassword, newPassword } = req.body;
+      if (!userId || !currentPassword || !newPassword) return res.status(400).json({ error: "Missing fields" });
+      const user = await storage.getUser(Number(userId));
+      if (!user || !user.passwordHash) return res.status(404).json({ error: "User not found" });
+      const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+      if (!ok) return res.status(401).json({ error: "wrong_password" });
+      const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+      await storage.updateUser(Number(userId), { passwordHash });
+      res.json({ ok: true });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  // Change username
+  app.post("/api/auth/change-username", async (req, res) => {
+    try {
+      const { userId, newUsername } = req.body;
+      if (!userId || !newUsername) return res.status(400).json({ error: "Missing fields" });
+      const existing = await storage.getUserByUsername(newUsername.trim());
+      if (existing && existing.id !== Number(userId)) return res.status(409).json({ error: "username_taken" });
+      const updated = await storage.updateUser(Number(userId), { username: newUsername.trim() });
+      res.json({ user: safeUser(updated) });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  // Delete account
+  app.delete("/api/auth/account/:userId", async (req, res) => {
+    try {
+      const { password } = req.body;
+      const user = await storage.getUser(Number(req.params.userId));
+      if (!user) return res.status(404).json({ error: "User not found" });
+      if (user.passwordHash) {
+        if (!password) return res.status(400).json({ error: "Password required" });
+        const ok = await bcrypt.compare(password, user.passwordHash);
+        if (!ok) return res.status(401).json({ error: "wrong_password" });
       }
-      res.json({ user });
+      await storage.deleteUser(Number(req.params.userId));
+      res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
@@ -28,7 +127,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     try {
       const user = await storage.getUser(Number(req.params.userId));
       if (!user) return res.status(404).json({ error: "User not found" });
-      res.json({ user });
+      res.json({ user: safeUser(user) });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 

@@ -1,21 +1,85 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Bell, LogOut, Trophy, Dumbbell, Flame, Sun, Moon, Globe } from "lucide-react";
+import { Bell, LogOut, Trophy, Dumbbell, Flame, Sun, Moon, Globe, KeyRound, AtSign, Trash2, Eye, EyeOff, ChevronRight } from "lucide-react";
 import { useAuth, useTheme, useLang } from "@/App";
 import { t } from "@/lib/i18n";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/hooks/use-toast";
 import { format, parseISO } from "date-fns";
 import { ru as dateFnsRu } from "date-fns/locale";
 
 export default function ProfilePage() {
-  const { userId, user, logout } = useAuth();
+  const { userId, user, login, logout } = useAuth();
   const { isDark, toggle } = useTheme();
   const { lang, setLang } = useLang();
   const locale = lang === "ru" ? dateFnsRu : undefined;
+  const { toast } = useToast();
   const [showNotifs, setShowNotifs] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [showChangeUsername, setShowChangeUsername] = useState(false);
+  const [showDeleteAccount, setShowDeleteAccount] = useState(false);
+
+  // Change password state
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPw, setShowPw] = useState(false);
+
+  // Change username state
+  const [newUsername, setNewUsername] = useState("");
+
+  // Delete account state
+  const [deletePassword, setDeletePassword] = useState("");
+
+  const ru = lang === "ru";
+
+  const changePassword = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/auth/change-password", { userId, currentPassword, newPassword }).then(r => r.json()),
+    onSuccess: (data) => {
+      if (data.ok) {
+        setShowChangePassword(false);
+        setCurrentPassword(""); setNewPassword(""); setConfirmPassword("");
+        toast({ title: ru ? "Пароль изменён" : "Password changed" });
+      } else if (data.error === "wrong_password") {
+        toast({ title: ru ? "Неверный текущий пароль" : "Wrong current password", variant: "destructive" });
+      } else {
+        toast({ title: ru ? "Ошибка" : "Error", variant: "destructive" });
+      }
+    },
+  });
+
+  const changeUsername = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/auth/change-username", { userId, newUsername: newUsername.trim() }).then(r => r.json()),
+    onSuccess: (data) => {
+      if (data.user) {
+        login(data.user.id, data.user);
+        setShowChangeUsername(false);
+        setNewUsername("");
+        toast({ title: ru ? "Никнейм изменён" : "Username updated" });
+      } else if (data.error === "username_taken") {
+        toast({ title: ru ? "Этот никнейм уже занят" : "Username already taken", variant: "destructive" });
+      } else {
+        toast({ title: ru ? "Ошибка" : "Error", variant: "destructive" });
+      }
+    },
+  });
+
+  const deleteAccount = useMutation({
+    mutationFn: () => apiRequest("DELETE", `/api/auth/account/${userId}`, { password: deletePassword }).then(r => r.json()),
+    onSuccess: (data) => {
+      if (data.ok) {
+        logout();
+      } else if (data.error === "wrong_password") {
+        toast({ title: ru ? "Неверный пароль" : "Wrong password", variant: "destructive" });
+      } else {
+        toast({ title: ru ? "Ошибка" : "Error", variant: "destructive" });
+      }
+    },
+  });
 
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ["/api/users", userId, "stats"],
@@ -147,13 +211,122 @@ export default function ProfilePage() {
           <span className="text-xs font-semibold text-primary">{lang === "ru" ? "RU → EN" : "EN → RU"}</span>
         </button>
 
+        {/* Change username */}
+        <button onClick={() => { setNewUsername(user?.username ?? ""); setShowChangeUsername(true); }}
+          className="w-full flex items-center gap-3 px-4 py-3.5 hover-elevate border-b border-card-border text-left">
+          <AtSign size={18} className="text-muted-foreground" />
+          <span className="font-medium text-sm flex-1">{ru ? "Изменить никнейм" : "Change username"}</span>
+          <ChevronRight size={14} className="text-muted-foreground" />
+        </button>
+
+        {/* Change password */}
+        <button onClick={() => setShowChangePassword(true)}
+          className="w-full flex items-center gap-3 px-4 py-3.5 hover-elevate border-b border-card-border text-left">
+          <KeyRound size={18} className="text-muted-foreground" />
+          <span className="font-medium text-sm flex-1">{ru ? "Изменить пароль" : "Change password"}</span>
+          <ChevronRight size={14} className="text-muted-foreground" />
+        </button>
+
         {/* Logout */}
         <button data-testid="button-logout" onClick={logout}
-          className="w-full flex items-center gap-3 px-4 py-3.5 hover-elevate text-left text-destructive">
+          className="w-full flex items-center gap-3 px-4 py-3.5 hover-elevate border-b border-card-border text-left text-destructive">
           <LogOut size={18} />
           <span className="font-medium text-sm">{t("profile.logout", lang)}</span>
         </button>
+
+        {/* Delete account */}
+        <button onClick={() => { setDeletePassword(""); setShowDeleteAccount(true); }}
+          className="w-full flex items-center gap-3 px-4 py-3.5 hover-elevate text-left text-destructive">
+          <Trash2 size={18} />
+          <span className="font-medium text-sm">{ru ? "Удалить аккаунт" : "Delete account"}</span>
+        </button>
       </div>
+
+      {/* ── Change Password Dialog ── */}
+      <Dialog open={showChangePassword} onOpenChange={v => { setShowChangePassword(v); if (!v) { setCurrentPassword(""); setNewPassword(""); setConfirmPassword(""); }}}>
+        <DialogContent className="bg-card border-card-border">
+          <DialogHeader><DialogTitle>{ru ? "Изменение пароля" : "Change password"}</DialogTitle></DialogHeader>
+          <div className="space-y-3 pt-1">
+            <div className="relative">
+              <Input type={showPw ? "text" : "password"} placeholder={ru ? "Текущий пароль" : "Current password"}
+                value={currentPassword} onChange={e => setCurrentPassword(e.target.value)}
+                className="bg-background border-border pr-11" />
+              <button type="button" onClick={() => setShowPw(v => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+            <Input type={showPw ? "text" : "password"} placeholder={ru ? "Новый пароль" : "New password"}
+              value={newPassword} onChange={e => setNewPassword(e.target.value)}
+              className="bg-background border-border" />
+            <Input type={showPw ? "text" : "password"} placeholder={ru ? "Повторите новый пароль" : "Confirm new password"}
+              value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
+              className="bg-background border-border" />
+            <div className="flex gap-2 pt-1">
+              <Button variant="outline" className="flex-1" onClick={() => setShowChangePassword(false)}>
+                {ru ? "Отмена" : "Cancel"}
+              </Button>
+              <Button className="flex-1"
+                disabled={changePassword.isPending || !currentPassword || !newPassword || newPassword !== confirmPassword}
+                onClick={() => {
+                  if (newPassword.length < 6) { toast({ title: ru ? "Пароль минимум 6 символов" : "Min 6 characters", variant: "destructive" }); return; }
+                  changePassword.mutate();
+                }}>
+                {changePassword.isPending ? (ru ? "Сохранение..." : "Saving...") : (ru ? "Сохранить" : "Save")}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Change Username Dialog ── */}
+      <Dialog open={showChangeUsername} onOpenChange={setShowChangeUsername}>
+        <DialogContent className="bg-card border-card-border">
+          <DialogHeader><DialogTitle>{ru ? "Изменение никнейма" : "Change username"}</DialogTitle></DialogHeader>
+          <div className="space-y-3 pt-1">
+            <Input placeholder={ru ? "Новый никнейм" : "New username"}
+              value={newUsername} onChange={e => setNewUsername(e.target.value)}
+              className="bg-background border-border" autoCapitalize="none" autoCorrect="off" />
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => setShowChangeUsername(false)}>
+                {ru ? "Отмена" : "Cancel"}
+              </Button>
+              <Button className="flex-1"
+                disabled={changeUsername.isPending || !newUsername.trim() || newUsername.trim() === user?.username}
+                onClick={() => changeUsername.mutate()}>
+                {changeUsername.isPending ? (ru ? "Сохранение..." : "Saving...") : (ru ? "Сохранить" : "Save")}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Delete Account Dialog ── */}
+      <Dialog open={showDeleteAccount} onOpenChange={setShowDeleteAccount}>
+        <DialogContent className="bg-card border-card-border">
+          <DialogHeader><DialogTitle className="text-destructive">{ru ? "Удалить аккаунт" : "Delete account"}</DialogTitle></DialogHeader>
+          <div className="space-y-3 pt-1">
+            <p className="text-sm text-muted-foreground">
+              {ru
+                ? "Все ваши данные будут удалены безвозвратно: тренировки, рекорды, профиль."
+                : "All your data will be permanently deleted: workouts, PRs, profile."}
+            </p>
+            <Input type="password" placeholder={ru ? "Подтвердите пароль" : "Confirm your password"}
+              value={deletePassword} onChange={e => setDeletePassword(e.target.value)}
+              className="bg-background border-border" />
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => setShowDeleteAccount(false)}>
+                {ru ? "Отмена" : "Cancel"}
+              </Button>
+              <Button variant="destructive" className="flex-1"
+                disabled={deleteAccount.isPending || !deletePassword}
+                onClick={() => deleteAccount.mutate()}>
+                {deleteAccount.isPending ? (ru ? "Удаление..." : "Deleting...") : (ru ? "Удалить" : "Delete")}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Notifications Panel */}
       <Dialog open={showNotifs} onOpenChange={setShowNotifs}>
