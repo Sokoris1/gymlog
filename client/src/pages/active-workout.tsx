@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Check, ChevronLeft, Timer, Search } from "lucide-react";
+import { Plus, Check, ChevronLeft, Timer, Search, Trash2, GripVertical, X } from "lucide-react";
 import { useAuth, useLang } from "@/App";
 import { t } from "@/lib/i18n";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -12,6 +12,7 @@ import { setActiveWorkout } from "@/lib/store";
 import { useToast } from "@/hooks/use-toast";
 import { exerciseNameRu } from "@/lib/exerciseNames";
 
+// ─── Timer ────────────────────────────────────────────────────────────────────
 function useTimer(running: boolean) {
   const [seconds, setSeconds] = useState(0);
   useEffect(() => {
@@ -28,26 +29,202 @@ function formatTime(s: number) {
   return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
 }
 
-function RestTimer({ onDismiss, lang }: { onDismiss: () => void; lang: string }) {
-  const [seconds, setSeconds] = useState(90);
-  useEffect(() => {
-    if (seconds <= 0) { onDismiss(); return; }
-    const id = setInterval(() => setSeconds(s => s - 1), 1000);
-    return () => clearInterval(id);
-  }, [seconds]);
+// ─── Number Input — clears zero on focus, saves on blur ───────────────────────
+function NumInput({ value, onChange, onBlur, placeholder, testId, step, min, max }: {
+  value: string; onChange: (v: string) => void; onBlur: () => void;
+  placeholder?: string; testId?: string; step?: string; min?: string; max?: string;
+}) {
+  const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    if (e.target.value === "0" || e.target.value === "0.0") {
+      onChange("");
+    } else {
+      // Select all on focus for easy replacement
+      e.target.select();
+    }
+  };
+  const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    if (e.target.value === "" || e.target.value === ".") onChange("0");
+    onBlur();
+  };
   return (
-    <div className="fixed bottom-24 left-4 right-4 bg-primary text-primary-foreground rounded-2xl p-4 flex items-center justify-between shadow-lg z-50">
-      <div className="flex items-center gap-2">
-        <Timer size={18} />
-        <span className="font-semibold">{t("active.restTimer", lang as any)}: {formatTime(seconds)}</span>
-      </div>
-      <Button variant="ghost" size="sm" className="text-primary-foreground hover:bg-primary-foreground/10" onClick={onDismiss}>
-        {t("active.skip", lang as any)}
-      </Button>
+    <input
+      data-testid={testId}
+      inputMode="decimal"
+      pattern="[0-9]*[.,]?[0-9]*"
+      value={value}
+      placeholder={placeholder ?? "0"}
+      onChange={e => onChange(e.target.value)}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
+      step={step}
+      min={min}
+      max={max}
+      className="w-full bg-background border border-border rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary"
+    />
+  );
+}
+
+// ─── Set Row ──────────────────────────────────────────────────────────────────
+function SetRow({ set, index, onComplete, onUpdate, onDelete, lang }: any) {
+  const [weight, setWeight] = useState(String(set.weight ?? 0));
+  const [reps, setReps] = useState(String(set.reps ?? 0));
+  const [rpe, setRpe] = useState(set.rpe ? String(set.rpe) : "");
+
+  // Keep local state in sync when set data changes from outside
+  useEffect(() => { setWeight(String(set.weight ?? 0)); }, [set.weight]);
+  useEffect(() => { setReps(String(set.reps ?? 0)); }, [set.reps]);
+  useEffect(() => { setRpe(set.rpe ? String(set.rpe) : ""); }, [set.rpe]);
+
+  const handleBlur = useCallback(() => {
+    onUpdate({
+      weight: parseFloat(weight.replace(",", ".")) || 0,
+      reps: parseInt(reps) || 0,
+      rpe: rpe ? parseFloat(rpe.replace(",", ".")) : null,
+    });
+  }, [weight, reps, rpe, onUpdate]);
+
+  const ru = lang === "ru";
+
+  return (
+    <div data-testid={`set-row-${set.id}`}
+      className={`grid grid-cols-[1.5rem_1fr_1fr_1fr_2rem_2rem] gap-1.5 items-center transition-opacity ${set.isCompleted ? "opacity-60" : ""}`}>
+      <span className="text-xs font-medium text-muted-foreground text-center">{index + 1}</span>
+      <NumInput
+        testId={`input-weight-${set.id}`}
+        value={weight} onChange={setWeight} onBlur={handleBlur}
+        placeholder="0" min="0" step="0.5"
+      />
+      <NumInput
+        testId={`input-reps-${set.id}`}
+        value={reps} onChange={setReps} onBlur={handleBlur}
+        placeholder="0" min="0"
+      />
+      <NumInput
+        testId={`input-rpe-${set.id}`}
+        value={rpe} onChange={setRpe} onBlur={handleBlur}
+        placeholder="–" min="1" max="10" step="0.5"
+      />
+      <button
+        data-testid={`button-complete-set-${set.id}`}
+        onClick={onComplete}
+        className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${set.isCompleted ? "bg-primary text-primary-foreground" : "bg-background border border-border text-muted-foreground"}`}>
+        <Check size={13} />
+      </button>
+      <button
+        onClick={onDelete}
+        className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
+        <X size={13} />
+      </button>
     </div>
   );
 }
 
+// ─── Exercise Block ───────────────────────────────────────────────────────────
+function ExerciseBlock({
+  workoutExercise: we, lang, index, total,
+  onAddSet, onSetComplete, onUpdateSet, onDeleteSet,
+  onDeleteExercise, onMoveUp, onMoveDown,
+}: any) {
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const ru = lang === "ru";
+  const exName = ru
+    ? (exerciseNameRu[we.exercise?.name ?? ""] ?? we.exercise?.name ?? "Exercise")
+    : (we.exercise?.name ?? "Exercise");
+
+  return (
+    <div data-testid={`exercise-block-${we.id}`} className="bg-card border border-card-border rounded-2xl overflow-hidden">
+      {/* Header */}
+      <div className="px-3 py-2.5 border-b border-card-border flex items-center gap-2">
+        {/* Reorder buttons */}
+        <div className="flex flex-col gap-0.5 flex-shrink-0">
+          <button
+            onClick={onMoveUp} disabled={index === 0}
+            className="w-5 h-4 flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-20 transition-colors">
+            <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 5L5 1L9 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+          </button>
+          <button
+            onClick={onMoveDown} disabled={index === total - 1}
+            className="w-5 h-4 flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-20 transition-colors">
+            <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+          </button>
+        </div>
+
+        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+          <span className="text-xs font-bold text-primary">
+            {t(`muscleShort.${we.exercise?.muscleGroup}` as any, lang) || "?"}
+          </span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold text-sm truncate">{exName}</div>
+          <div className="text-muted-foreground text-xs">
+            {t(`exercises.muscles.${we.exercise?.muscleGroup}` as any, lang)} · {t(`exercises.equip.${we.exercise?.equipment}` as any, lang)}
+          </div>
+        </div>
+        {/* Delete exercise button */}
+        <button
+          onClick={() => setShowDeleteConfirm(true)}
+          className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors flex-shrink-0">
+          <Trash2 size={14} />
+        </button>
+      </div>
+
+      {/* Column headers */}
+      <div className="px-3 pt-2 pb-1 grid grid-cols-[1.5rem_1fr_1fr_1fr_2rem_2rem] gap-1.5 text-muted-foreground text-xs font-medium">
+        <span className="text-center">#</span>
+        <span className="text-center">{ru ? "кг" : "kg"}</span>
+        <span className="text-center">{ru ? "Повт" : "Reps"}</span>
+        <span className="text-center">RPE</span>
+        <span></span>
+        <span></span>
+      </div>
+
+      {/* Sets */}
+      <div className="px-3 pb-3 space-y-1.5">
+        {(we.sets ?? []).map((set: any, idx: number) => (
+          <SetRow
+            key={set.id}
+            set={set}
+            index={idx}
+            lang={lang}
+            onComplete={() => onSetComplete(set)}
+            onUpdate={(data: any) => onUpdateSet(set.id, data)}
+            onDelete={() => onDeleteSet(set.id)}
+          />
+        ))}
+        <button
+          data-testid={`button-add-set-${we.id}`}
+          onClick={onAddSet}
+          className="w-full py-2 rounded-xl border border-dashed border-border text-muted-foreground text-xs flex items-center justify-center gap-1 hover:border-primary hover:text-primary transition-colors mt-1">
+          <Plus size={12} /> {t("active.addSet", lang)}
+        </button>
+      </div>
+
+      {/* Delete exercise confirm */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/60 flex items-end justify-center z-50 p-4">
+          <div className="bg-card border border-card-border rounded-2xl p-5 w-full max-w-sm">
+            <h3 className="font-semibold text-base mb-2">
+              {ru ? "Удалить упражнение?" : "Remove exercise?"}
+            </h3>
+            <p className="text-muted-foreground text-sm mb-4">
+              {ru ? `«${exName}» и все его подходы будут удалены из тренировки.` : `"${exName}" and all its sets will be removed.`}
+            </p>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => setShowDeleteConfirm(false)}>
+                {ru ? "Отмена" : "Cancel"}
+              </Button>
+              <Button variant="destructive" className="flex-1" onClick={() => { onDeleteExercise(); setShowDeleteConfirm(false); }}>
+                {ru ? "Удалить" : "Remove"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function ActiveWorkoutPage() {
   const [, params] = useRoute("/workout/active/:id");
   const [, navigate] = useLocation();
@@ -56,9 +233,10 @@ export default function ActiveWorkoutPage() {
   const { toast } = useToast();
   const workoutId = Number(params?.id);
   const [showAddExercise, setShowAddExercise] = useState(false);
-  const [showRestTimer, setShowRestTimer] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [muscleFilter, setMuscleFilter] = useState("");
+  // Local order state for reordering without server round-trips
+  const [exerciseOrder, setExerciseOrder] = useState<number[]>([]);
   const workoutSeconds = useTimer(true);
 
   const { data: workoutData, isLoading } = useQuery({
@@ -67,6 +245,13 @@ export default function ActiveWorkoutPage() {
     enabled: !!workoutId,
     refetchInterval: false,
   });
+
+  // Sync local order when data arrives
+  useEffect(() => {
+    if (workoutData?.exercises) {
+      setExerciseOrder(workoutData.exercises.map((we: any) => we.id));
+    }
+  }, [workoutData?.exercises?.length]);
 
   const { data: exercises } = useQuery({
     queryKey: ["/api/exercises"],
@@ -79,6 +264,11 @@ export default function ActiveWorkoutPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/workout", workoutId] });
       setShowAddExercise(false);
     },
+  });
+
+  const deleteExercise = useMutation({
+    mutationFn: (id: number) => apiRequest("DELETE", `/api/workout-exercises/${id}`).then(r => r.json()),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/workout", workoutId] }),
   });
 
   const addSet = useMutation({
@@ -105,10 +295,8 @@ export default function ActiveWorkoutPage() {
     },
     onSuccess: (data) => {
       if (data.newPRs?.length > 0) {
-        const prNames = data.newPRs.map((pr: any) => pr.exerciseName ?? "").filter(Boolean);
         toast({
           title: `🏆 ${data.newPRs.length} ${data.newPRs.length === 1 ? t("active.newPR", lang) : t("active.newPRs", lang)}`,
-          description: prNames.join(", "),
         });
       }
       queryClient.invalidateQueries({ queryKey: ["/api/workouts", userId] });
@@ -120,7 +308,6 @@ export default function ActiveWorkoutPage() {
 
   const handleSetComplete = (set: any) => {
     updateSet.mutate({ id: set.id, data: { isCompleted: !set.isCompleted } });
-    if (!set.isCompleted) setShowRestTimer(true);
   };
 
   const handleAddSet = (workoutExerciseId: number, currentSets: any[]) => {
@@ -130,24 +317,45 @@ export default function ActiveWorkoutPage() {
       setNumber: currentSets.length + 1,
       weight: lastSet?.weight ?? 0,
       reps: lastSet?.reps ?? 0,
+      rpe: lastSet?.rpe ?? null,   // ← carry over RPE from last set
       isCompleted: false,
     });
   };
 
-  const muscleGroups = ["chest", "back", "legs", "shoulders", "arms", "core"];
+  const handleMoveExercise = (id: number, direction: "up" | "down") => {
+    setExerciseOrder(prev => {
+      const idx = prev.indexOf(id);
+      if (idx < 0) return prev;
+      const next = [...prev];
+      const swap = direction === "up" ? idx - 1 : idx + 1;
+      if (swap < 0 || swap >= next.length) return prev;
+      [next[idx], next[swap]] = [next[swap], next[idx]];
+      return next;
+    });
+  };
 
-  const muscleLabel = (mg: string) =>
-    t(`exercises.muscles.${mg}` as any, lang) || mg;
+  const muscleGroups = ["chest", "back", "legs", "shoulders", "arms", "core"];
+  const muscleLabel = (mg: string) => t(`exercises.muscles.${mg}` as any, lang) || mg;
 
   const filteredExercises = exercises?.filter((ex: any) => {
-    const matchSearch = !searchQuery || ex.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchSearch = !searchQuery ||
+      ex.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (exerciseNameRu[ex.name] ?? "").toLowerCase().includes(searchQuery.toLowerCase());
     const matchMuscle = !muscleFilter || ex.muscleGroup === muscleFilter;
     return matchSearch && matchMuscle;
   }) ?? [];
 
-  const workoutExercises = workoutData?.exercises ?? [];
+  const rawExercises: any[] = workoutData?.exercises ?? [];
+
+  // Apply local order
+  const workoutExercises = exerciseOrder.length > 0
+    ? exerciseOrder.map(id => rawExercises.find(we => we.id === id)).filter(Boolean)
+    : rawExercises;
+
   const completedSets = workoutExercises.reduce((n: number, we: any) =>
     n + (we.sets?.filter((s: any) => s.isCompleted)?.length ?? 0), 0);
+
+  const ru = lang === "ru";
 
   return (
     <div className="min-h-screen bg-background pb-36">
@@ -182,15 +390,20 @@ export default function ActiveWorkoutPage() {
             <p className="text-muted-foreground text-xs mt-1">{t("active.noExercisesSub", lang)}</p>
           </div>
         ) : (
-          workoutExercises.map((we: any) => (
+          workoutExercises.map((we: any, idx: number) => (
             <ExerciseBlock
               key={we.id}
               workoutExercise={we}
               lang={lang}
+              index={idx}
+              total={workoutExercises.length}
               onAddSet={() => handleAddSet(we.id, we.sets ?? [])}
               onSetComplete={(set: any) => handleSetComplete(set)}
               onUpdateSet={(setId: number, data: any) => updateSet.mutate({ id: setId, data })}
               onDeleteSet={(setId: number) => deleteSet.mutate(setId)}
+              onDeleteExercise={() => deleteExercise.mutate(we.id)}
+              onMoveUp={() => handleMoveExercise(we.id, "up")}
+              onMoveDown={() => handleMoveExercise(we.id, "down")}
             />
           ))
         )}
@@ -201,8 +414,6 @@ export default function ActiveWorkoutPage() {
           <span className="font-medium text-sm">{t("active.addExercise", lang)}</span>
         </button>
       </div>
-
-      {showRestTimer && <RestTimer lang={lang} onDismiss={() => setShowRestTimer(false)} />}
 
       {/* Bottom Finish Bar */}
       <div className="fixed bottom-0 left-0 right-0 bg-sidebar border-t border-sidebar-border p-4 safe-bottom">
@@ -257,74 +468,6 @@ export default function ActiveWorkoutPage() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
-
-function ExerciseBlock({ workoutExercise: we, lang, onAddSet, onSetComplete, onUpdateSet, onDeleteSet }: any) {
-  return (
-    <div data-testid={`exercise-block-${we.id}`} className="bg-card border border-card-border rounded-2xl overflow-hidden">
-      <div className="px-4 py-3 border-b border-card-border flex items-center gap-2">
-        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-          <span className="text-xs font-bold text-primary">
-            {t(`muscleShort.${we.exercise?.muscleGroup}` as any, lang) || "?"}
-          </span>
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="font-semibold text-sm truncate">{lang === "ru" ? (exerciseNameRu[we.exercise?.name ?? ""] ?? we.exercise?.name ?? "Exercise") : (we.exercise?.name ?? "Exercise")}</div>
-          <div className="text-muted-foreground text-xs">
-            {t(`exercises.muscles.${we.exercise?.muscleGroup}` as any, lang)} · {t(`exercises.equip.${we.exercise?.equipment}` as any, lang)}
-          </div>
-        </div>
-      </div>
-
-      <div className="px-4 pt-2 pb-1 grid grid-cols-[2rem_1fr_1fr_1fr_2rem] gap-2 text-muted-foreground text-xs font-medium">
-        <span>#</span><span>кг</span><span>Повт.</span><span>RPE</span><span></span>
-      </div>
-
-      <div className="px-4 pb-3 space-y-1.5">
-        {(we.sets ?? []).map((set: any, idx: number) => (
-          <SetRow key={set.id} set={set} index={idx}
-            onComplete={() => onSetComplete(set)}
-            onUpdate={(data: any) => onUpdateSet(set.id, data)}
-            onDelete={() => onDeleteSet(set.id)}
-          />
-        ))}
-        <button data-testid={`button-add-set-${we.id}`} onClick={onAddSet}
-          className="w-full py-2 rounded-xl border border-dashed border-border text-muted-foreground text-xs flex items-center justify-center gap-1 hover:border-primary hover:text-primary transition-colors">
-          <Plus size={12} /> {t("active.addSet", lang)}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function SetRow({ set, index, onComplete, onUpdate }: any) {
-  const [weight, setWeight] = useState(String(set.weight ?? 0));
-  const [reps, setReps] = useState(String(set.reps ?? 0));
-  const [rpe, setRpe] = useState(set.rpe ? String(set.rpe) : "");
-
-  const handleBlur = () => {
-    onUpdate({ weight: parseFloat(weight) || 0, reps: parseInt(reps) || 0, rpe: rpe ? parseFloat(rpe) : null });
-  };
-
-  return (
-    <div data-testid={`set-row-${set.id}`}
-      className={`grid grid-cols-[2rem_1fr_1fr_1fr_2rem] gap-2 items-center transition-colors ${set.isCompleted ? "opacity-70" : ""}`}>
-      <span className="text-xs font-medium text-muted-foreground text-center">{index + 1}</span>
-      <input data-testid={`input-weight-${set.id}`} type="number" value={weight}
-        onChange={e => setWeight(e.target.value)} onBlur={handleBlur}
-        className="w-full bg-background border border-border rounded-lg px-2 py-1.5 text-sm text-center" placeholder="0" min="0" />
-      <input data-testid={`input-reps-${set.id}`} type="number" value={reps}
-        onChange={e => setReps(e.target.value)} onBlur={handleBlur}
-        className="w-full bg-background border border-border rounded-lg px-2 py-1.5 text-sm text-center" placeholder="0" min="0" />
-      <input data-testid={`input-rpe-${set.id}`} type="number" value={rpe}
-        onChange={e => setRpe(e.target.value)} onBlur={handleBlur}
-        className="w-full bg-background border border-border rounded-lg px-2 py-1.5 text-sm text-center" placeholder="–" min="1" max="10" step="0.5" />
-      <button data-testid={`button-complete-set-${set.id}`} onClick={onComplete}
-        className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${set.isCompleted ? "bg-primary text-primary-foreground" : "bg-background border border-border text-muted-foreground"}`}>
-        <Check size={13} />
-      </button>
     </div>
   );
 }

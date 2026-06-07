@@ -1,15 +1,21 @@
-// Simple global state using React context - no localStorage (blocked in sandbox)
-export const APP_USER_KEY = "__gymlog_user__";
-
-// Active workout state - stored in module-level variable (session only)
-let activeWorkoutId: number | null = null;
-let activeWorkoutStartTime: Date | null = null;
+// Active workout persisted in localStorage so navigation doesn't lose it
+const STORAGE_KEY = "__gymlog_active_workout__";
 
 export function setActiveWorkout(id: number | null) {
-  activeWorkoutId = id;
-  activeWorkoutStartTime = id ? new Date() : null;
+  if (id === null) {
+    localStorage.removeItem(STORAGE_KEY);
+  } else {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ id, startTime: new Date().toISOString() }));
+  }
 }
 
-export function getActiveWorkout() {
-  return { id: activeWorkoutId, startTime: activeWorkoutStartTime };
+export function getActiveWorkout(): { id: number | null; startTime: Date | null } {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return { id: null, startTime: null };
+    const parsed = JSON.parse(raw);
+    return { id: parsed.id, startTime: parsed.startTime ? new Date(parsed.startTime) : null };
+  } catch {
+    return { id: null, startTime: null };
+  }
 }
