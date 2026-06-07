@@ -52,15 +52,19 @@ function AppRoutes() {
   const [location] = useLocation();
   const isActiveWorkout = location.startsWith("/workout/active");
 
-  if (authLoading) {
+  // Show login page immediately; overlay spinner while session is being checked
+  if (!userId) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-      </div>
+      <>
+        <LoginPage />
+        {authLoading && (
+          <div className="fixed inset-0 bg-background/80 flex items-center justify-center z-50 pointer-events-none">
+            <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+          </div>
+        )}
+      </>
     );
   }
-
-  if (!userId) return <LoginPage />;
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -98,7 +102,10 @@ export default function App() {
 
   // Restore session from cookie on app start
   useEffect(() => {
-    fetch("/api/auth/session", { credentials: "include" })
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000); // 8s timeout
+
+    fetch("/api/auth/session", { credentials: "include", signal: controller.signal })
       .then(async r => {
         if (r.ok) {
           const data = await r.json();
@@ -108,8 +115,13 @@ export default function App() {
           }
         }
       })
-      .catch(() => {})
-      .finally(() => setAuthLoading(false));
+      .catch(() => {}) // 401, abort, network error — all treated as "no session"
+      .finally(() => {
+        clearTimeout(timeout);
+        setAuthLoading(false);
+      });
+
+    return () => { controller.abort(); clearTimeout(timeout); };
   }, []);
 
   // Inactivity auto-logout after 30 days
