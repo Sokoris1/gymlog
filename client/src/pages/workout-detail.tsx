@@ -1,6 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation, useParams } from "wouter";
-import { ArrowLeft, Dumbbell, Calendar, Clock, Trash2, ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowLeft, Dumbbell, Calendar, Clock, Trash2, ChevronDown, ChevronUp, Pencil } from "lucide-react";
 import { useState } from "react";
 import { useAuth, useLang } from "@/App";
 import { t } from "@/lib/i18n";
@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { format, parseISO } from "date-fns";
 import { ru as dateFnsRu } from "date-fns/locale";
 import { exerciseNameRu } from "@/lib/exerciseNames";
+import { setActiveWorkout } from "@/lib/store";
 
 export default function WorkoutDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -67,11 +68,21 @@ export default function WorkoutDetailPage() {
           <ArrowLeft size={18} />
         </button>
         <h1 className="text-xl font-bold flex-1 truncate">{workout.title}</h1>
-        <button
-          onClick={() => setShowDeleteConfirm(true)}
-          className="w-9 h-9 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-500 hover:bg-red-500/20 transition-colors">
-          <Trash2 size={16} />
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              setActiveWorkout(workout.id);
+              navigate(`/workout/active/${workout.id}`);
+            }}
+            className="w-9 h-9 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary hover:bg-primary/20 transition-colors">
+            <Pencil size={15} />
+          </button>
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            className="w-9 h-9 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-500 hover:bg-red-500/20 transition-colors">
+            <Trash2 size={16} />
+          </button>
+        </div>
       </div>
 
       {/* Meta */}
