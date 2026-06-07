@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback, forwardRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth, useLang } from "@/App";
@@ -7,6 +7,32 @@ import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff } from "lucide-react";
 
 type Mode = "check" | "login" | "register" | "set-password";
+
+// Defined OUTSIDE component so React doesn't recreate it on every render
+const PasswordInput = forwardRef<HTMLInputElement, {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  showPassword: boolean;
+  onToggleShow: () => void;
+  onEnter?: () => void;
+}>(({ value, onChange, placeholder, showPassword, onToggleShow, onEnter }, ref) => (
+  <div className="relative">
+    <Input
+      ref={ref}
+      type={showPassword ? "text" : "password"}
+      placeholder={placeholder}
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      onKeyDown={e => e.key === "Enter" && onEnter?.()}
+      className="h-12 text-base bg-card border-card-border pr-11"
+    />
+    <button type="button" onClick={onToggleShow}
+      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
+      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+    </button>
+  </div>
+));
 
 const Logo = () => (
   <div className="w-20 h-20 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
@@ -169,28 +195,7 @@ export default function LoginPage() {
     }
   };
 
-  const PasswordInput = ({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) => (
-    <div className="relative">
-      <Input
-        type={showPassword ? "text" : "password"}
-        placeholder={placeholder}
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        onKeyDown={e => {
-          if (e.key === "Enter") {
-            if (mode === "login") handleLogin();
-            else if (mode === "register") handleRegister();
-            else if (mode === "set-password") handleSetPassword();
-          }
-        }}
-        className="h-12 text-base bg-card border-card-border pr-11"
-      />
-      <button type="button" onClick={() => setShowPassword(v => !v)}
-        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
-        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-      </button>
-    </div>
-  );
+  const toggleShow = useCallback(() => setShowPassword(v => !v), []);
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6">
@@ -243,7 +248,7 @@ export default function LoginPage() {
               <p className="font-semibold text-sm">@{username}</p>
             </div>
             <div className="space-y-3">
-              <PasswordInput value={password} onChange={setPassword} placeholder={labels.passwordPh} />
+              <PasswordInput value={password} onChange={setPassword} placeholder={labels.passwordPh} showPassword={showPassword} onToggleShow={toggleShow} onEnter={handleLogin} />
               <Button className="w-full h-12 font-semibold" onClick={handleLogin}
                 disabled={loading || !password}>
                 {loading ? labels.loading : labels.loginBtn}
@@ -266,8 +271,8 @@ export default function LoginPage() {
               <Input placeholder={labels.namePh} value={displayName}
                 onChange={e => setDisplayName(e.target.value)}
                 className="h-12 text-base bg-card border-card-border" />
-              <PasswordInput value={password} onChange={setPassword} placeholder={labels.passwordPh} />
-              <PasswordInput value={confirmPassword} onChange={setConfirmPassword} placeholder={labels.confirmPh} />
+              <PasswordInput value={password} onChange={setPassword} placeholder={labels.passwordPh} showPassword={showPassword} onToggleShow={toggleShow} />
+              <PasswordInput value={confirmPassword} onChange={setConfirmPassword} placeholder={labels.confirmPh} showPassword={showPassword} onToggleShow={toggleShow} onEnter={handleRegister} />
               <Button className="w-full h-12 font-semibold" onClick={handleRegister}
                 disabled={loading || !password || !confirmPassword}>
                 {loading ? labels.loading : labels.registerBtn}
@@ -287,8 +292,8 @@ export default function LoginPage() {
               <p className="text-xs text-muted-foreground">{labels.setPassDesc}</p>
             </div>
             <div className="space-y-3">
-              <PasswordInput value={password} onChange={setPassword} placeholder={labels.passwordPh} />
-              <PasswordInput value={confirmPassword} onChange={setConfirmPassword} placeholder={labels.confirmPh} />
+              <PasswordInput value={password} onChange={setPassword} placeholder={labels.passwordPh} showPassword={showPassword} onToggleShow={toggleShow} />
+              <PasswordInput value={confirmPassword} onChange={setConfirmPassword} placeholder={labels.confirmPh} showPassword={showPassword} onToggleShow={toggleShow} onEnter={handleSetPassword} />
               <Button className="w-full h-12 font-semibold" onClick={handleSetPassword}
                 disabled={loading || !password || !confirmPassword}>
                 {loading ? labels.loading : labels.setPassBtn}
