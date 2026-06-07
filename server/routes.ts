@@ -35,7 +35,11 @@ const setAuthCookie = (res: any, userId: number) => {
 
 // Clear auth cookie helper
 const clearAuthCookie = (res: any) => {
-  res.clearCookie(COOKIE_NAME);
+  res.clearCookie(COOKIE_NAME, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+  });
 };
 
 export async function registerRoutes(httpServer: Server, app: Express) {

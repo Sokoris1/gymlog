@@ -91,60 +91,50 @@ export default function App() {
   const [isDark, setIsDark] = useState(true);
   const [lang, setLang] = useState<Lang>("ru");
   const [authLoading, setAuthLoading] = useState(true);
-  const inactivityTimer = useState<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (isDark) {
-      document.documentElement.classList.remove("light");
-    } else {
-      document.documentElement.classList.add("light");
-    }
+    document.documentElement.classList.toggle("light", !isDark);
   }, [isDark]);
 
   // Restore session from cookie on app start
   useEffect(() => {
     fetch("/api/auth/session", { credentials: "include" })
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data?.user) {
-          setUserId(data.user.id);
-          setUser(data.user);
+      .then(async r => {
+        if (r.ok) {
+          const data = await r.json();
+          if (data?.user) {
+            setUserId(data.user.id);
+            setUser(data.user);
+          }
         }
       })
       .catch(() => {})
       .finally(() => setAuthLoading(false));
   }, []);
 
-  // Inactivity auto-logout
+  // Inactivity auto-logout after 30 days
   useEffect(() => {
     if (!userId) return;
-
-    const resetTimer = () => {
-      if (inactivityTimer[0]) clearTimeout(inactivityTimer[0]);
-      const t = setTimeout(() => {
-        doLogout();
-      }, INACTIVITY_TIMEOUT_MS);
-      inactivityTimer[1](t);
+    let timer: ReturnType<typeof setTimeout>;
+    const reset = () => {
+      clearTimeout(timer);
+      timer = setTimeout(logout, INACTIVITY_TIMEOUT_MS);
     };
-
-    const events = ["mousemove", "keydown", "click", "touchstart", "scroll"];
-    events.forEach(e => window.addEventListener(e, resetTimer, { passive: true }));
-    resetTimer();
-
+    const events = ["mousemove", "keydown", "click", "touchstart", "scroll"] as const;
+    events.forEach(e => window.addEventListener(e, reset, { passive: true }));
+    reset();
     return () => {
-      events.forEach(e => window.removeEventListener(e, resetTimer));
-      if (inactivityTimer[0]) clearTimeout(inactivityTimer[0]);
+      clearTimeout(timer);
+      events.forEach(e => window.removeEventListener(e, reset));
     };
   }, [userId]);
 
-  const doLogout = () => {
+  const login = (id: number, u: any) => { setUserId(id); setUser(u); };
+  const logout = () => {
     fetch("/api/auth/logout", { method: "POST", credentials: "include" }).catch(() => {});
     setUserId(null);
     setUser(null);
   };
-
-  const login = (id: number, u: any) => { setUserId(id); setUser(u); };
-  const logout = doLogout;
 
   return (
     <QueryClientProvider client={queryClient}>
