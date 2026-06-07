@@ -141,7 +141,11 @@ export default function App() {
     };
   }, [userId]);
 
-  const login = (id: number, u: any) => { setUserId(id); setUser(u); };
+  const login = (id: number, u: any) => {
+    console.log("[Auth] login called, userId:", id, "user:", u);
+    setUserId(id);
+    setUser(u);
+  };
   const logout = () => {
     fetch("/api/auth/logout", { method: "POST", credentials: "include" }).catch(() => {});
     setUserId(null);

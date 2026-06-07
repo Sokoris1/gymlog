@@ -103,6 +103,7 @@ export default function LoginPage() {
         credentials: "include",
       });
       const data = await res.json();
+      console.log("[Login] check response:", res.status, data);
       if (!data.exists) {
         setMode("register");
       } else if (!data.hasPassword) {
@@ -129,6 +130,7 @@ export default function LoginPage() {
         credentials: "include",
       });
       const data = await res.json();
+      console.log("[Login] login response:", res.status, data);
       if (data.user) {
         login(data.user.id, data.user);
       } else if (data.error === "wrong_credentials") {
