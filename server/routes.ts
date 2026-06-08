@@ -1,6 +1,7 @@
-import type { Express } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import type { Server } from "http";
 import bcrypt from "bcryptjs";
+import passport from "passport";
 import { storage } from "./storage";
 import { seedDatabase } from "./seed";
 import { insertUserSchema, insertExerciseSchema, insertWorkoutTemplateSchema,
@@ -18,10 +19,35 @@ const safeUser = (u: any) => {
   return rest;
 };
 
+// ─── Auth middleware ──────────────────────────────────────────────────────────
+export const requireAuth = (req: Request, res: Response, next: NextFunction) => {
+  if (req.isAuthenticated()) return next();
+  res.status(401).json({ error: "unauthorized" });
+};
+
+// Check that the authenticated user owns the resource by userId field
+const requireOwner = (resourceUserId: number, req: Request, res: Response): boolean => {
+  const me = (req.user as any)?.id;
+  if (me !== resourceUserId) {
+    res.status(403).json({ error: "forbidden" });
+    return false;
+  }
+  return true;
+};
+
 export async function registerRoutes(httpServer: Server, app: Express) {
   await seedDatabase();
 
   // ─── Auth ────────────────────────────────────────────────────────────────
+
+  // Get current session user (called on app load)
+  app.get("/api/auth/session", (req, res) => {
+    if (req.isAuthenticated()) {
+      res.json({ user: safeUser(req.user) });
+    } else {
+      res.status(401).json({ error: "not_authenticated" });
+    }
+  });
 
   app.post("/api/auth/check", async (req, res) => {
     try {
@@ -33,17 +59,21 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  app.post("/api/auth/login", async (req, res) => {
-    try {
-      const { username, password } = req.body;
-      if (!username || !password) return res.status(400).json({ error: "Username and password required" });
-      const user = await storage.getUserByUsername(username.trim());
-      if (!user) return res.status(401).json({ error: "wrong_credentials" });
-      if (!user.passwordHash) return res.status(400).json({ error: "no_password" });
-      const ok = await bcrypt.compare(password, user.passwordHash);
-      if (!ok) return res.status(401).json({ error: "wrong_credentials" });
-      res.json({ user: safeUser(user) });
-    } catch (e) { res.status(500).json({ error: String(e) }); }
+  app.post("/api/auth/login", (req, res, next) => {
+    passport.authenticate("local", (err: any, user: any, info: any) => {
+      if (err) return res.status(500).json({ error: String(err) });
+      if (!user) return res.status(401).json({ error: info?.message || "wrong_credentials" });
+      req.logIn(user, (loginErr) => {
+        if (loginErr) return res.status(500).json({ error: String(loginErr) });
+        res.json({ user: safeUser(user) });
+      });
+    })(req, res, next);
+  });
+
+  app.post("/api/auth/logout", (req, res) => {
+    req.logout(() => {
+      res.json({ ok: true });
+    });
   });
 
   app.post("/api/auth/register", async (req, res) => {
@@ -59,7 +89,10 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         passwordHash,
         goal: "general",
       });
-      res.json({ user: safeUser(user) });
+      req.logIn(user, (err) => {
+        if (err) return res.status(500).json({ error: String(err) });
+        res.json({ user: safeUser(user) });
+      });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
@@ -72,47 +105,54 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       if (user.passwordHash) return res.status(400).json({ error: "already_has_password" });
       const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
       const updated = await storage.updateUser(user.id, { passwordHash });
-      res.json({ user: safeUser(updated) });
+      req.logIn(updated, (err) => {
+        if (err) return res.status(500).json({ error: String(err) });
+        res.json({ user: safeUser(updated) });
+      });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  app.post("/api/auth/change-password", async (req, res) => {
+  app.post("/api/auth/change-password", requireAuth, async (req, res) => {
     try {
-      const { userId, currentPassword, newPassword } = req.body;
-      if (!userId || !currentPassword || !newPassword) return res.status(400).json({ error: "Missing fields" });
-      const user = await storage.getUser(Number(userId));
+      const me = (req.user as any).id;
+      const { currentPassword, newPassword } = req.body;
+      if (!currentPassword || !newPassword) return res.status(400).json({ error: "Missing fields" });
+      const user = await storage.getUser(me);
       if (!user || !user.passwordHash) return res.status(404).json({ error: "User not found" });
       const ok = await bcrypt.compare(currentPassword, user.passwordHash);
       if (!ok) return res.status(401).json({ error: "wrong_password" });
       const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
-      await storage.updateUser(Number(userId), { passwordHash });
+      await storage.updateUser(me, { passwordHash });
       res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  app.post("/api/auth/change-username", async (req, res) => {
+  app.post("/api/auth/change-username", requireAuth, async (req, res) => {
     try {
-      const { userId, newUsername } = req.body;
-      if (!userId || !newUsername) return res.status(400).json({ error: "Missing fields" });
+      const me = (req.user as any).id;
+      const { newUsername } = req.body;
+      if (!newUsername) return res.status(400).json({ error: "Missing fields" });
       const existing = await storage.getUserByUsername(newUsername.trim());
-      if (existing && existing.id !== Number(userId)) return res.status(409).json({ error: "username_taken" });
-      const updated = await storage.updateUser(Number(userId), { username: newUsername.trim() });
+      if (existing && existing.id !== me) return res.status(409).json({ error: "username_taken" });
+      const updated = await storage.updateUser(me, { username: newUsername.trim() });
       res.json({ user: safeUser(updated) });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  app.delete("/api/auth/account/:userId", async (req, res) => {
+  app.delete("/api/auth/account/:userId", requireAuth, async (req, res) => {
     try {
+      const me = (req.user as any).id;
+      if (me !== Number(req.params.userId)) return res.status(403).json({ error: "forbidden" });
       const { password } = req.body;
-      const user = await storage.getUser(Number(req.params.userId));
+      const user = await storage.getUser(me);
       if (!user) return res.status(404).json({ error: "User not found" });
       if (user.passwordHash) {
         if (!password) return res.status(400).json({ error: "Password required" });
         const ok = await bcrypt.compare(password, user.passwordHash);
         if (!ok) return res.status(401).json({ error: "wrong_password" });
       }
-      await storage.deleteUser(Number(req.params.userId));
-      res.json({ ok: true });
+      await storage.deleteUser(me);
+      req.logout(() => res.json({ ok: true }));
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
@@ -132,7 +172,6 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  // Returns the user object directly (not wrapped in {user:...})
   app.get("/api/users/:id", async (req, res) => {
     try {
       const user = await storage.getUser(Number(req.params.id));
@@ -141,8 +180,10 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  app.patch("/api/users/:id", async (req, res) => {
+  app.patch("/api/users/:id", requireAuth, async (req, res) => {
     try {
+      const me = (req.user as any).id;
+      if (me !== Number(req.params.id)) return res.status(403).json({ error: "forbidden" });
       const schema = insertUserSchema.partial();
       const result = schema.safeParse(req.body);
       if (!result.success) return res.status(400).json({ error: result.error });
@@ -180,17 +221,17 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       const friendships = await storage.getFriends(userId);
       const enriched = await Promise.all(friendships.map(async f => ({
         ...f,
-        // friendData is the user object directly (safe, no passwordHash)
         friendData: safeUser(await storage.getUser(f.friendId)),
       })));
       res.json(enriched);
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  app.get("/api/users/:id/friend-requests", async (req, res) => {
+  app.get("/api/users/:id/friend-requests", requireAuth, async (req, res) => {
     try {
-      const userId = Number(req.params.id);
-      const incoming = await storage.getIncomingRequests(userId);
+      const me = (req.user as any).id;
+      if (me !== Number(req.params.id)) return res.status(403).json({ error: "forbidden" });
+      const incoming = await storage.getIncomingRequests(me);
       const enriched = await Promise.all(incoming.map(async f => ({
         ...f,
         senderData: safeUser(await storage.getUser(f.userId)),
@@ -199,27 +240,33 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  app.post("/api/friends/request", async (req, res) => {
+  app.post("/api/friends/request", requireAuth, async (req, res) => {
     try {
-      const { userId, friendId } = req.body;
-      if (!userId || !friendId) return res.status(400).json({ error: "Missing fields" });
-      const existing = await storage.getFriendship(userId, friendId);
+      const me = (req.user as any).id;
+      const { friendId } = req.body;
+      if (!friendId) return res.status(400).json({ error: "Missing fields" });
+      const existing = await storage.getFriendship(me, friendId);
       if (existing) return res.status(400).json({ error: "Already sent" });
-      const f = await storage.createFriendRequest({ userId, friendId, status: "pending" });
-      const sender = await storage.getUser(userId);
+      const f = await storage.createFriendRequest({ userId: me, friendId, status: "pending" });
+      const sender = await storage.getUser(me);
       await storage.createNotification({
         userId: friendId,
         type: "friend_request",
-        payload: JSON.stringify({ fromUserId: userId, fromUserName: sender?.name }),
+        payload: JSON.stringify({ fromUserId: me, fromUserName: sender?.name }),
         isRead: false,
       });
       res.json(f);
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  app.patch("/api/friends/:id/status", async (req, res) => {
+  app.patch("/api/friends/:id/status", requireAuth, async (req, res) => {
     try {
+      const me = (req.user as any).id;
       const { status } = req.body;
+      // Only the recipient (friendId) can accept/reject
+      const friendRecord = await storage.getFriendshipById(Number(req.params.id));
+      if (!friendRecord) return res.status(404).json({ error: "Not found" });
+      if (friendRecord.friendId !== me) return res.status(403).json({ error: "forbidden" });
       const updated = await storage.updateFriendStatus(Number(req.params.id), status);
       res.json(updated);
     } catch (e) { res.status(500).json({ error: String(e) }); }
@@ -241,7 +288,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  app.post("/api/exercises", async (req, res) => {
+  app.post("/api/exercises", requireAuth, async (req, res) => {
     try {
       const result = insertExerciseSchema.safeParse(req.body);
       if (!result.success) return res.status(400).json({ error: result.error });
@@ -271,7 +318,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  app.post("/api/templates", async (req, res) => {
+  app.post("/api/templates", requireAuth, async (req, res) => {
     try {
       const result = insertWorkoutTemplateSchema.safeParse(req.body);
       if (!result.success) return res.status(400).json({ error: result.error });
@@ -279,7 +326,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  app.patch("/api/templates/:id", async (req, res) => {
+  app.patch("/api/templates/:id", requireAuth, async (req, res) => {
     try {
       res.json(await storage.updateWorkoutTemplate(Number(req.params.id), req.body));
     } catch (e) { res.status(500).json({ error: String(e) }); }
@@ -300,15 +347,20 @@ export async function registerRoutes(httpServer: Server, app: Express) {
   });
 
   // ─── Workouts ─────────────────────────────────────────────────────────────
-  app.get("/api/workouts/:userId", async (req, res) => {
-    try { res.json(await storage.getWorkouts(Number(req.params.userId))); }
-    catch (e) { res.status(500).json({ error: String(e) }); }
+  app.get("/api/workouts/:userId", requireAuth, async (req, res) => {
+    try {
+      const me = (req.user as any).id;
+      if (me !== Number(req.params.userId)) return res.status(403).json({ error: "forbidden" });
+      res.json(await storage.getWorkouts(me));
+    } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  app.get("/api/workout/:id", async (req, res) => {
+  app.get("/api/workout/:id", requireAuth, async (req, res) => {
     try {
       const w = await storage.getWorkout(Number(req.params.id));
       if (!w) return res.status(404).json({ error: "Not found" });
+      const me = (req.user as any).id;
+      if (w.userId !== me) return res.status(403).json({ error: "forbidden" });
       const wExs = await storage.getWorkoutExercises(w.id);
       const exercises = await Promise.all(wExs.map(async we => ({
         ...we,
@@ -319,34 +371,47 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  app.post("/api/workouts", async (req, res) => {
+  app.post("/api/workouts", requireAuth, async (req, res) => {
     try {
       const result = insertWorkoutSchema.safeParse(req.body);
       if (!result.success) return res.status(400).json({ error: result.error });
+      const me = (req.user as any).id;
+      if (result.data.userId !== me) return res.status(403).json({ error: "forbidden" });
       res.json(await storage.createWorkout(result.data));
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  app.patch("/api/workout/:id", async (req, res) => {
+  app.patch("/api/workout/:id", requireAuth, async (req, res) => {
     try {
+      const w = await storage.getWorkout(Number(req.params.id));
+      if (!w) return res.status(404).json({ error: "Not found" });
+      const me = (req.user as any).id;
+      if (w.userId !== me) return res.status(403).json({ error: "forbidden" });
       const schema = insertWorkoutSchema.partial();
       const result = schema.safeParse(req.body);
       if (!result.success) return res.status(400).json({ error: result.error });
-      const w = await storage.updateWorkout(Number(req.params.id), result.data);
-      res.json(w);
+      res.json(await storage.updateWorkout(Number(req.params.id), result.data));
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  app.delete("/api/workout/:id", async (req, res) => {
+  app.delete("/api/workout/:id", requireAuth, async (req, res) => {
     try {
+      const w = await storage.getWorkout(Number(req.params.id));
+      if (!w) return res.status(404).json({ error: "Not found" });
+      const me = (req.user as any).id;
+      if (w.userId !== me) return res.status(403).json({ error: "forbidden" });
       await storage.deleteWorkout(Number(req.params.id));
       res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
   // ─── Workout Exercises ────────────────────────────────────────────────────
-  app.get("/api/workout/:id/exercises", async (req, res) => {
+  app.get("/api/workout/:id/exercises", requireAuth, async (req, res) => {
     try {
+      const w = await storage.getWorkout(Number(req.params.id));
+      if (!w) return res.status(404).json({ error: "Not found" });
+      const me = (req.user as any).id;
+      if (w.userId !== me) return res.status(403).json({ error: "forbidden" });
       const wExs = await storage.getWorkoutExercises(Number(req.params.id));
       const enriched = await Promise.all(wExs.map(async we => ({
         ...we,
@@ -357,33 +422,54 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  app.post("/api/workout-exercises", async (req, res) => {
+  app.post("/api/workout-exercises", requireAuth, async (req, res) => {
     try {
       const result = insertWorkoutExerciseSchema.safeParse(req.body);
       if (!result.success) return res.status(400).json({ error: result.error });
+      // Verify workout belongs to current user
+      const w = await storage.getWorkout(result.data.workoutId);
+      if (!w) return res.status(404).json({ error: "Not found" });
+      const me = (req.user as any).id;
+      if (w.userId !== me) return res.status(403).json({ error: "forbidden" });
       const we = await storage.createWorkoutExercise(result.data);
       res.json({ ...we, exercise: await storage.getExercise(we.exerciseId), sets: [] });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  app.delete("/api/workout-exercises/:id", async (req, res) => {
+  app.delete("/api/workout-exercises/:id", requireAuth, async (req, res) => {
     try {
+      const we = await storage.getWorkoutExercise(Number(req.params.id));
+      if (!we) return res.status(404).json({ error: "Not found" });
+      const w = await storage.getWorkout(we.workoutId);
+      const me = (req.user as any).id;
+      if (!w || w.userId !== me) return res.status(403).json({ error: "forbidden" });
       await storage.deleteWorkoutExercise(Number(req.params.id));
       res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
   // ─── Sets ─────────────────────────────────────────────────────────────────
-  app.post("/api/sets", async (req, res) => {
+  app.post("/api/sets", requireAuth, async (req, res) => {
     try {
       const result = insertSetSchema.safeParse(req.body);
       if (!result.success) return res.status(400).json({ error: result.error });
+      const we = await storage.getWorkoutExercise(result.data.workoutExerciseId);
+      if (!we) return res.status(404).json({ error: "Not found" });
+      const w = await storage.getWorkout(we.workoutId);
+      const me = (req.user as any).id;
+      if (!w || w.userId !== me) return res.status(403).json({ error: "forbidden" });
       res.json(await storage.createSet(result.data));
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  app.patch("/api/sets/:id", async (req, res) => {
+  app.patch("/api/sets/:id", requireAuth, async (req, res) => {
     try {
+      const set = await storage.getSet(Number(req.params.id));
+      if (!set) return res.status(404).json({ error: "Not found" });
+      const we = await storage.getWorkoutExercise(set.workoutExerciseId);
+      const w = we ? await storage.getWorkout(we.workoutId) : null;
+      const me = (req.user as any).id;
+      if (!w || w.userId !== me) return res.status(403).json({ error: "forbidden" });
       const schema = insertSetSchema.partial();
       const result = schema.safeParse(req.body);
       if (!result.success) return res.status(400).json({ error: result.error });
@@ -391,17 +477,25 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  app.delete("/api/sets/:id", async (req, res) => {
+  app.delete("/api/sets/:id", requireAuth, async (req, res) => {
     try {
+      const set = await storage.getSet(Number(req.params.id));
+      if (!set) return res.status(404).json({ error: "Not found" });
+      const we = await storage.getWorkoutExercise(set.workoutExerciseId);
+      const w = we ? await storage.getWorkout(we.workoutId) : null;
+      const me = (req.user as any).id;
+      if (!w || w.userId !== me) return res.status(403).json({ error: "forbidden" });
       await storage.deleteSet(Number(req.params.id));
       res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
   // ─── Personal Records ─────────────────────────────────────────────────────
-  app.get("/api/prs/:userId", async (req, res) => {
+  app.get("/api/prs/:userId", requireAuth, async (req, res) => {
     try {
-      const prs = await storage.getPersonalRecords(Number(req.params.userId));
+      const me = (req.user as any).id;
+      if (me !== Number(req.params.userId)) return res.status(403).json({ error: "forbidden" });
+      const prs = await storage.getPersonalRecords(me);
       const enriched = await Promise.all(prs.map(async pr => ({
         ...pr,
         exercise: await storage.getExercise(pr.exerciseId),
@@ -410,18 +504,23 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  app.post("/api/prs", async (req, res) => {
+  app.post("/api/prs", requireAuth, async (req, res) => {
     try {
-      const { userId, exerciseId, weight, reps, date } = req.body;
-      if (!userId || !exerciseId || weight == null || reps == null || !date)
+      const me = (req.user as any).id;
+      const { exerciseId, weight, reps, date } = req.body;
+      if (!exerciseId || weight == null || reps == null || !date)
         return res.status(400).json({ error: "Missing fields" });
-      const rows = await storage.createPersonalRecord({ userId, exerciseId, weight: Number(weight), reps: Number(reps), date });
+      const rows = await storage.createPersonalRecord({ userId: me, exerciseId, weight: Number(weight), reps: Number(reps), date });
       res.json(rows);
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  app.delete("/api/prs/:id", async (req, res) => {
+  app.delete("/api/prs/:id", requireAuth, async (req, res) => {
     try {
+      const me = (req.user as any).id;
+      const pr = await storage.getPersonalRecord(Number(req.params.id));
+      if (!pr) return res.status(404).json({ error: "Not found" });
+      if (pr.userId !== me) return res.status(403).json({ error: "forbidden" });
       await storage.deletePersonalRecord(Number(req.params.id));
       res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: String(e) }); }
@@ -452,22 +551,20 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  // Public workouts for a user (friend profile) — uses storage.getWorkouts
-  app.get("/api/users/:userId/workouts", async (req, res) => {
+  // Public workouts for a friend profile — only authenticated users can view friends' workouts
+  app.get("/api/users/:userId/workouts", requireAuth, async (req, res) => {
     try {
       const workouts = await storage.getWorkouts(Number(req.params.userId));
-      // Only return completed workouts (those that have an endTime)
       const completed = workouts.filter((w: any) => !!w.endTime);
       res.json(completed);
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
   // ─── Admin ────────────────────────────────────────────────────────────────
-  app.get("/api/admin/users", async (req, res) => {
+  app.get("/api/admin/users", requireAuth, async (req, res) => {
     try {
-      const adminId = Number(req.query.adminId);
-      const admin = await storage.getUser(adminId);
-      if (!admin || !(admin as any).isAdmin) return res.status(403).json({ error: "forbidden" });
+      const admin = req.user as any;
+      if (!admin?.isAdmin) return res.status(403).json({ error: "forbidden" });
       const users = await storage.getAllUsers();
       res.json(users.map(u => {
         const { passwordHash, ...safe } = u as any;
@@ -476,25 +573,27 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  app.delete("/api/admin/users/:id", async (req, res) => {
+  app.delete("/api/admin/users/:id", requireAuth, async (req, res) => {
     try {
-      const adminId = Number(req.query.adminId);
-      const admin = await storage.getUser(adminId);
-      if (!admin || !(admin as any).isAdmin) return res.status(403).json({ error: "forbidden" });
+      const admin = req.user as any;
+      if (!admin?.isAdmin) return res.status(403).json({ error: "forbidden" });
       const targetId = Number(req.params.id);
-      if (targetId === adminId) return res.status(400).json({ error: "Cannot delete yourself" });
+      if (targetId === admin.id) return res.status(400).json({ error: "Cannot delete yourself" });
       await storage.deleteUser(targetId);
       res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
   // ─── Training Events ──────────────────────────────────────────────────────
-  app.get("/api/events/:userId", async (req, res) => {
-    try { res.json(await storage.getTrainingEvents(Number(req.params.userId))); }
-    catch (e) { res.status(500).json({ error: String(e) }); }
+  app.get("/api/events/:userId", requireAuth, async (req, res) => {
+    try {
+      const me = (req.user as any).id;
+      if (me !== Number(req.params.userId)) return res.status(403).json({ error: "forbidden" });
+      res.json(await storage.getTrainingEvents(me));
+    } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  app.post("/api/events", async (req, res) => {
+  app.post("/api/events", requireAuth, async (req, res) => {
     try {
       const result = insertTrainingEventSchema.safeParse(req.body);
       if (!result.success) return res.status(400).json({ error: result.error });
@@ -503,9 +602,11 @@ export async function registerRoutes(httpServer: Server, app: Express) {
   });
 
   // ─── Event Invites ────────────────────────────────────────────────────────
-  app.get("/api/invites/:userId", async (req, res) => {
+  app.get("/api/invites/:userId", requireAuth, async (req, res) => {
     try {
-      const invites = await storage.getEventInvites(Number(req.params.userId));
+      const me = (req.user as any).id;
+      if (me !== Number(req.params.userId)) return res.status(403).json({ error: "forbidden" });
+      const invites = await storage.getEventInvites(me);
       const enriched = await Promise.all(invites.map(async inv => ({
         ...inv,
         event: await storage.getTrainingEvent(inv.eventId),
@@ -514,7 +615,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  app.post("/api/invites", async (req, res) => {
+  app.post("/api/invites", requireAuth, async (req, res) => {
     try {
       const result = insertEventInviteSchema.safeParse(req.body);
       if (!result.success) return res.status(400).json({ error: result.error });
@@ -530,32 +631,40 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  app.patch("/api/invites/:id/status", async (req, res) => {
+  app.patch("/api/invites/:id/status", requireAuth, async (req, res) => {
     try {
+      const me = (req.user as any).id;
+      const invite = await storage.getEventInvite(Number(req.params.id));
+      if (!invite) return res.status(404).json({ error: "Not found" });
+      if (invite.userId !== me) return res.status(403).json({ error: "forbidden" });
       const { status } = req.body;
       res.json(await storage.updateEventInviteStatus(Number(req.params.id), status));
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
   // ─── Notifications ────────────────────────────────────────────────────────
-  app.get("/api/notifications/:userId", async (req, res) => {
+  app.get("/api/notifications/:userId", requireAuth, async (req, res) => {
     try {
-      const notifs = await storage.getNotifications(Number(req.params.userId));
-      const unread = await storage.getUnreadCount(Number(req.params.userId));
+      const me = (req.user as any).id;
+      if (me !== Number(req.params.userId)) return res.status(403).json({ error: "forbidden" });
+      const notifs = await storage.getNotifications(me);
+      const unread = await storage.getUnreadCount(me);
       res.json({ notifications: notifs, unreadCount: unread });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  app.patch("/api/notifications/:id/read", async (req, res) => {
+  app.patch("/api/notifications/:id/read", requireAuth, async (req, res) => {
     try {
       await storage.markNotificationRead(Number(req.params.id));
       res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  app.post("/api/notifications/mark-all-read/:userId", async (req, res) => {
+  app.post("/api/notifications/mark-all-read/:userId", requireAuth, async (req, res) => {
     try {
-      await storage.markAllRead(Number(req.params.userId));
+      const me = (req.user as any).id;
+      if (me !== Number(req.params.userId)) return res.status(403).json({ error: "forbidden" });
+      await storage.markAllRead(me);
       res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });

@@ -8,7 +8,6 @@ import { Eye, EyeOff } from "lucide-react";
 
 type Mode = "check" | "login" | "register" | "set-password";
 
-// Defined OUTSIDE component so React doesn't recreate it on every render
 const PasswordInput = forwardRef<HTMLInputElement, {
   value: string;
   onChange: (v: string) => void;
@@ -91,7 +90,6 @@ export default function LoginPage() {
     setDisplayName("");
   };
 
-  // Step 1: check if username exists
   const handleCheck = async () => {
     const u = username.trim();
     if (!u) return;
@@ -113,7 +111,6 @@ export default function LoginPage() {
     }
   };
 
-  // Step 2a: login
   const handleLogin = async () => {
     if (!password) return;
     setLoading(true);
@@ -121,20 +118,19 @@ export default function LoginPage() {
       const res = await apiRequest("POST", "/api/auth/login", { username: username.trim(), password });
       const data = await res.json();
       if (data.user) {
-        login(data.user.id, data.user);
+        login(data.user);
       } else if (data.error === "wrong_credentials") {
         toast({ title: ru ? "Неверный пароль" : "Wrong password", variant: "destructive" });
       } else {
         toast({ title: ru ? "Ошибка входа" : "Login failed", variant: "destructive" });
       }
     } catch {
-      toast({ title: ru ? "Ошибка сервера" : "Server error", variant: "destructive" });
+      toast({ title: ru ? "Неверный пароль" : "Wrong password", variant: "destructive" });
     } finally {
       setLoading(false);
     }
   };
 
-  // Step 2b: register
   const handleRegister = async () => {
     if (!password) return;
     if (password !== confirmPassword) {
@@ -154,7 +150,7 @@ export default function LoginPage() {
       });
       const data = await res.json();
       if (data.user) {
-        login(data.user.id, data.user);
+        login(data.user);
       } else if (data.error === "username_taken") {
         toast({ title: ru ? "Этот никнейм уже занят" : "Username already taken", variant: "destructive" });
         reset();
@@ -168,7 +164,6 @@ export default function LoginPage() {
     }
   };
 
-  // Step 2c: set password for existing account without one
   const handleSetPassword = async () => {
     if (!password) return;
     if (password !== confirmPassword) {
@@ -184,7 +179,7 @@ export default function LoginPage() {
       const res = await apiRequest("POST", "/api/auth/set-password", { username: username.trim(), password });
       const data = await res.json();
       if (data.user) {
-        login(data.user.id, data.user);
+        login(data.user);
       } else {
         toast({ title: ru ? "Ошибка" : "Error", variant: "destructive" });
       }
@@ -199,7 +194,6 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6">
-      {/* Lang toggle */}
       <div className="absolute top-5 right-5">
         <button onClick={() => setLang(lang === "ru" ? "en" : "ru")}
           className="px-3 py-1.5 rounded-xl bg-card border border-card-border text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors">
@@ -207,7 +201,6 @@ export default function LoginPage() {
         </button>
       </div>
 
-      {/* Logo */}
       <div className="mb-10 flex flex-col items-center gap-4">
         <Logo />
         <div className="text-center">
@@ -218,7 +211,6 @@ export default function LoginPage() {
 
       <div className="w-full max-w-sm space-y-4">
 
-        {/* ── STEP 1: Enter username ── */}
         {mode === "check" && (
           <>
             <div className="space-y-3">
@@ -240,7 +232,6 @@ export default function LoginPage() {
           </>
         )}
 
-        {/* ── STEP 2a: Login ── */}
         {mode === "login" && (
           <>
             <div className="bg-card border border-card-border rounded-2xl px-4 py-3 mb-1">
@@ -260,7 +251,6 @@ export default function LoginPage() {
           </>
         )}
 
-        {/* ── STEP 2b: Register ── */}
         {mode === "register" && (
           <>
             <div className="bg-card border border-card-border rounded-2xl px-4 py-3 mb-1">
@@ -284,7 +274,6 @@ export default function LoginPage() {
           </>
         )}
 
-        {/* ── STEP 2c: Set password (migration) ── */}
         {mode === "set-password" && (
           <>
             <div className="bg-primary/10 border border-primary/20 rounded-2xl px-4 py-3 mb-1">

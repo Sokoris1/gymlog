@@ -1,9 +1,15 @@
 import "dotenv/config";
 import express, { Response, NextFunction } from 'express';
 import type { Request } from 'express';
+import session from "express-session";
+import passport from "passport";
+import { Strategy as LocalStrategy } from "passport-local";
+import bcrypt from "bcryptjs";
+import MemoryStore from "memorystore";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "node:http";
+import { storage } from "./storage";
 
 const app = express();
 const httpServer = createServer(app);
@@ -23,6 +29,51 @@ app.use(
 );
 
 app.use(express.urlencoded({ extended: false }));
+
+// ─── Session ──────────────────────────────────────────────────────────────────
+const MStore = MemoryStore(session);
+app.use(session({
+  secret: process.env.SESSION_SECRET || "gymlog-dev-secret-change-in-prod",
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === "production",
+    httpOnly: true,
+    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+    sameSite: "lax",
+  },
+  store: new MStore({ checkPeriod: 86400000 }),
+}));
+
+// ─── Passport ─────────────────────────────────────────────────────────────────
+passport.use(new LocalStrategy(
+  { usernameField: "username", passwordField: "password" },
+  async (username, password, done) => {
+    try {
+      const user = await storage.getUserByUsername(username.trim());
+      if (!user) return done(null, false, { message: "wrong_credentials" });
+      if (!user.passwordHash) return done(null, false, { message: "no_password" });
+      const ok = await bcrypt.compare(password, user.passwordHash);
+      if (!ok) return done(null, false, { message: "wrong_credentials" });
+      return done(null, user);
+    } catch (e) {
+      return done(e);
+    }
+  }
+));
+
+passport.serializeUser((user: any, done) => done(null, user.id));
+passport.deserializeUser(async (id: number, done) => {
+  try {
+    const user = await storage.getUser(id);
+    done(null, user || false);
+  } catch (e) {
+    done(e);
+  }
+});
+
+app.use(passport.initialize());
+app.use(passport.session());
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
@@ -77,9 +128,6 @@ app.use((req, res, next) => {
     return res.status(status).json({ message });
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
   if (process.env.NODE_ENV === "production") {
     serveStatic(app);
   } else {
@@ -87,10 +135,6 @@ app.use((req, res, next) => {
     await setupVite(httpServer, app);
   }
 
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || "5000", 10);
   httpServer.listen(port, () => {
     log(`serving on port ${port}`);
