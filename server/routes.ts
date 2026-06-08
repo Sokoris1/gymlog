@@ -504,6 +504,34 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
+  // ─── Admin ────────────────────────────────────────────────────────────────
+  // Get all users (admin only)
+  app.get("/api/admin/users", async (req, res) => {
+    try {
+      const adminId = Number(req.query.adminId);
+      const admin = await storage.getUser(adminId);
+      if (!admin || !(admin as any).isAdmin) return res.status(403).json({ error: "forbidden" });
+      const users = await storage.getAllUsers();
+      res.json(users.map(u => {
+        const { passwordHash, ...safe } = u as any;
+        return safe;
+      }));
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  // Delete user (admin only)
+  app.delete("/api/admin/users/:id", async (req, res) => {
+    try {
+      const adminId = Number(req.query.adminId);
+      const admin = await storage.getUser(adminId);
+      if (!admin || !(admin as any).isAdmin) return res.status(403).json({ error: "forbidden" });
+      const targetId = Number(req.params.id);
+      if (targetId === adminId) return res.status(400).json({ error: "Cannot delete yourself" });
+      await storage.deleteUser(targetId);
+      res.json({ ok: true });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
   // ─── Training Events ─────────────────────────────────────────────────────
   app.get("/api/events/:userId", async (req, res) => {
     try { res.json(await storage.getTrainingEvents(Number(req.params.userId))); }

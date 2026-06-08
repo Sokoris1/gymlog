@@ -18,6 +18,7 @@ import ProgressPage from "@/pages/progress";
 import TemplatesPage from "@/pages/templates";
 import WorkoutDetailPage from "@/pages/workout-detail";
 import FriendProfilePage from "@/pages/friend-profile";
+import AdminPage from "@/pages/admin";
 import BottomNav from "@/components/BottomNav";
 import NotFound from "@/pages/not-found";
 
@@ -62,6 +63,7 @@ function AppRoutes() {
           <Route path="/calendar" component={CalendarPage} />
           <Route path="/friends" component={FriendsPage} />
           <Route path="/friends/:id" component={FriendProfilePage} />
+          <Route path="/admin" component={AdminPage} />
           <Route path="/profile" component={ProfilePage} />
           <Route path="/profile/:id" component={ProfilePage} />
           <Route path="/exercises" component={ExercisesPage} />

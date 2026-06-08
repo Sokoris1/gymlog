@@ -1,6 +1,23 @@
 import { storage } from "./storage";
+import bcrypt from "bcryptjs";
+import { db } from "./storage";
+import { users as usersTable } from "@shared/schema";
 
 export async function seedDatabase() {
+  // ─── Admin account (always ensure exists) ────────────────────────────────
+  const existingAdmin = await storage.getUserByUsername("admin");
+  if (!existingAdmin) {
+    const adminHash = await bcrypt.hash("admin123", 10);
+    await db.insert(usersTable).values({
+      name: "Admin",
+      username: "admin",
+      passwordHash: adminHash,
+      isAdmin: true,
+      goal: "general",
+    });
+    console.log("Admin account created: login=admin, password=admin123");
+  }
+
   const existingExercises = await storage.getExercises();
   if (existingExercises.length > 0) return; // Already seeded
 

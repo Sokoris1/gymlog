@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Bell, LogOut, Trophy, Dumbbell, Flame, Sun, Moon, Globe, KeyRound, AtSign, Trash2, Eye, EyeOff, ChevronRight } from "lucide-react";
+import { Bell, LogOut, Trophy, Dumbbell, Flame, Sun, Moon, Globe, KeyRound, AtSign, Trash2, Eye, EyeOff, ChevronRight, Shield } from "lucide-react";
 import { useAuth, useTheme, useLang } from "@/App";
+import { useLocation } from "wouter";
 import { t } from "@/lib/i18n";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,7 @@ import { ru as dateFnsRu } from "date-fns/locale";
 
 export default function ProfilePage() {
   const { userId, user, login, logout } = useAuth();
+  const [, navigate] = useLocation();
   const { isDark, toggle } = useTheme();
   const { lang, setLang } = useLang();
   const locale = lang === "ru" ? dateFnsRu : undefined;
@@ -226,6 +228,16 @@ export default function ProfilePage() {
           <span className="font-medium text-sm flex-1">{ru ? "Изменить пароль" : "Change password"}</span>
           <ChevronRight size={14} className="text-muted-foreground" />
         </button>
+
+        {/* Admin panel */}
+        {user?.isAdmin && (
+          <button onClick={() => navigate("/admin")}
+            className="w-full flex items-center gap-3 px-4 py-3.5 hover-elevate border-b border-card-border text-left text-primary">
+            <Shield size={18} />
+            <span className="font-medium text-sm">{ru ? "Панель администратора" : "Admin Panel"}</span>
+            <ChevronRight size={14} className="ml-auto text-muted-foreground" />
+          </button>
+        )}
 
         {/* Logout */}
         <button data-testid="button-logout" onClick={logout}

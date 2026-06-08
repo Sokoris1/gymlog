@@ -168,7 +168,7 @@ export default function WorkoutDetailPage() {
 
       {/* Delete confirm */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black/60 flex items-end justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[200] p-4">
           <div className="bg-card border border-card-border rounded-2xl p-5 w-full max-w-sm">
             <h3 className="font-semibold text-base mb-2">
               {lang === "ru" ? "Удалить тренировку?" : "Delete workout?"}

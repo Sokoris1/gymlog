@@ -209,7 +209,7 @@ function ExerciseBlock({
 
       {/* Delete exercise confirm */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black/60 flex items-end justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[200] p-4">
           <div className="bg-card border border-card-border rounded-2xl p-5 w-full max-w-sm">
             <h3 className="font-semibold text-base mb-2">
               {ru ? "Удалить упражнение?" : "Remove exercise?"}
@@ -302,12 +302,7 @@ export default function ActiveWorkoutPage() {
       const endTime = new Date().toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit" });
       return apiRequest("PATCH", `/api/workout/${workoutId}`, { endTime, durationMinutes }).then(r => r.json());
     },
-    onSuccess: (data) => {
-      if (data.newPRs?.length > 0) {
-        toast({
-          title: `🏆 ${data.newPRs.length} ${data.newPRs.length === 1 ? t("active.newPR", lang) : t("active.newPRs", lang)}`,
-        });
-      }
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/workouts", userId] });
       queryClient.invalidateQueries({ queryKey: ["/api/users", userId, "stats"] });
       setActiveWorkout(null);

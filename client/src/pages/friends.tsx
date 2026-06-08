@@ -196,11 +196,11 @@ export default function FriendsPage() {
 
       {/* ─── Add Friend Dialog ────────────────────────────────────────── */}
       <Dialog open={showAddFriend} onOpenChange={setShowAddFriend}>
-        <DialogContent className="bg-card border-card-border">
+        <DialogContent className="bg-card border-card-border max-h-[80vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Добавить друга</DialogTitle>
           </DialogHeader>
-          <div className="space-y-2 mt-2">
+          <div className="overflow-y-auto flex-1 space-y-2 mt-2 pr-1">
             {availableUsers.length === 0 ? (
               <p className="text-muted-foreground text-sm text-center py-4">Нет доступных пользователей</p>
             ) : (

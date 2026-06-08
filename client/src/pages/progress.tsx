@@ -378,7 +378,7 @@ export default function ProgressPage() {
 
           {/* Exercise picker sheet */}
           {showExPicker && (
-            <div className="fixed inset-0 bg-black/60 flex items-end justify-center z-50 p-4">
+            <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[200] p-4">
               <div className="bg-card border border-card-border rounded-2xl w-full max-w-md max-h-[70vh] flex flex-col">
                 <div className="p-4 border-b border-border">
                   <h3 className="font-semibold text-sm mb-3">{ru ? "Выберите упражнение" : "Select exercise"}</h3>
@@ -405,7 +405,7 @@ export default function ProgressPage() {
 
           {/* Delete confirm */}
           {deleteConfirmId !== null && (
-            <div className="fixed inset-0 bg-black/60 flex items-end justify-center z-50 p-4">
+            <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[200] p-4">
               <div className="bg-card border border-card-border rounded-2xl p-5 w-full max-w-sm">
                 <h3 className="font-semibold text-base mb-2">{ru ? "Удалить рекорд?" : "Delete record?"}</h3>
                 <p className="text-muted-foreground text-sm mb-4">{ru ? "Это действие нельзя отменить." : "This cannot be undone."}</p>

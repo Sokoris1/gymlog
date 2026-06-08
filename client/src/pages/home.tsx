@@ -84,11 +84,10 @@ export default function HomePage() {
       </Link>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-3 mb-5">
+      <div className="grid grid-cols-2 gap-3 mb-5">
         {[
-          { label: t("home.workouts", lang),  value: statsData?.totalWorkouts ?? 0,                    color: "text-primary" },
-          { label: t("home.volume", lang),    value: statsData?.totalVolume?.toLocaleString() ?? 0,    color: "text-chart-2" },
-          { label: t("home.records", lang),   value: statsData?.totalPRs ?? 0,                         color: "text-chart-4" },
+          { label: t("home.workouts", lang),  value: statsData?.totalWorkouts ?? 0,  color: "text-primary" },
+          { label: t("home.records", lang),   value: statsData?.totalPRs ?? 0,       color: "text-chart-4" },
         ].map(stat => (
           <div key={stat.label} className="bg-card border border-card-border rounded-2xl p-3 text-center">
             {statsLoading ? (

@@ -8,6 +8,7 @@ export const users = pgTable("users", {
   name: text("name").notNull(),
   username: text("username").notNull().unique(),
   passwordHash: text("password_hash"),  // null = old account without password
+  isAdmin: boolean("is_admin").default(false),
   avatar: text("avatar"),
   bodyWeight: real("body_weight"),
   goal: text("goal", { enum: ["strength", "hypertrophy", "weight_loss", "general"] }).default("general"),
