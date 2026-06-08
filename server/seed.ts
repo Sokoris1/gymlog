@@ -1,21 +1,22 @@
 import { storage } from "./storage";
 import bcrypt from "bcryptjs";
-import { db } from "./storage";
-import { users as usersTable } from "@shared/schema";
+import { neon } from "@neondatabase/serverless";
 
 export async function seedDatabase() {
   // ─── Admin account (always ensure exists) ────────────────────────────────
+  const rawSql = neon(process.env.DATABASE_URL!);
+  try {
+    await rawSql`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin boolean DEFAULT false`;
+  } catch (_) { /* already exists */ }
+
   const existingAdmin = await storage.getUserByUsername("admin");
   if (!existingAdmin) {
     const adminHash = await bcrypt.hash("admin123", 10);
-    await db.insert(usersTable).values({
-      name: "Admin",
-      username: "admin",
-      passwordHash: adminHash,
-      isAdmin: true,
-      goal: "general",
-    });
+    await rawSql`INSERT INTO users (name, username, password_hash, is_admin, goal, created_at)
+                 VALUES ('Admin', 'admin', ${adminHash}, true, 'general', NOW())`;
     console.log("Admin account created: login=admin, password=admin123");
+  } else {
+    await rawSql`UPDATE users SET is_admin = true WHERE username = 'admin'`;
   }
 
   const existingExercises = await storage.getExercises();
