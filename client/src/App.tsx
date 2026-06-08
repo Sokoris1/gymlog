@@ -27,12 +27,13 @@ import NotFound from "@/pages/not-found";
 type AuthContextType = {
   userId: number | null;
   user: any;
-  login: (userId: number, user: any) => void;
+  login: (user: any) => void;
   logout: () => void;
+  authLoading: boolean;
 };
 
 export const AuthContext = createContext<AuthContextType>({
-  userId: null, user: null, login: () => {}, logout: () => {},
+  userId: null, user: null, login: () => {}, logout: () => {}, authLoading: true,
 });
 export const useAuth = () => useContext(AuthContext);
 
@@ -47,9 +48,17 @@ export const LangContext = createContext<LangContextType>({ lang: "ru", setLang:
 export const useLang = () => useContext(LangContext);
 
 function AppRoutes() {
-  const { userId } = useAuth();
+  const { userId, authLoading } = useAuth();
   const [location] = useLocation();
   const isActiveWorkout = location.startsWith("/workout/active");
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+      </div>
+    );
+  }
 
   if (!userId) return <LoginPage />;
 
@@ -80,10 +89,21 @@ function AppRoutes() {
 }
 
 export default function App() {
-  const [userId, setUserId] = useState<number | null>(null);
   const [user, setUser] = useState<any>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [isDark, setIsDark] = useState(true);
   const [lang, setLang] = useState<Lang>("ru");
+
+  // Restore session on page load
+  useEffect(() => {
+    fetch("/api/auth/session", { credentials: "include" })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.user) setUser(data.user);
+      })
+      .catch(() => {})
+      .finally(() => setAuthLoading(false));
+  }, []);
 
   useEffect(() => {
     if (isDark) {
@@ -93,14 +113,21 @@ export default function App() {
     }
   }, [isDark]);
 
-  const login = (id: number, u: any) => { setUserId(id); setUser(u); };
-  const logout = () => { setUserId(null); setUser(null); };
+  const login = (u: any) => setUser(u);
+  const logout = () => {
+    fetch("/api/auth/logout", { method: "POST", credentials: "include" })
+      .catch(() => {})
+      .finally(() => {
+        setUser(null);
+        queryClient.clear();
+      });
+  };
 
   return (
     <QueryClientProvider client={queryClient}>
       <LangContext.Provider value={{ lang, setLang }}>
         <ThemeContext.Provider value={{ isDark, toggle: () => setIsDark(v => !v) }}>
-          <AuthContext.Provider value={{ userId, user, login, logout }}>
+          <AuthContext.Provider value={{ userId: user?.id ?? null, user, login, logout, authLoading }}>
             <Router hook={useHashLocation}>
               <AppRoutes />
             </Router>

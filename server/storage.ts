@@ -79,7 +79,6 @@ export interface IStorage {
   // Personal Records
   getPersonalRecords(userId: number): Promise<PersonalRecord[]>;
   getPersonalRecord(userId: number, exerciseId: number): Promise<PersonalRecord | undefined>;
-  upsertPersonalRecord(data: InsertPersonalRecord): Promise<PersonalRecord>;
   createPersonalRecord(data: InsertPersonalRecord): Promise<PersonalRecord>;
   deletePersonalRecord(id: number): Promise<void>;
 
@@ -274,21 +273,6 @@ export const storage: IStorage = {
   async getPersonalRecord(userId, exerciseId) {
     const rows = await db.select().from(personalRecords)
       .where(and(eq(personalRecords.userId, userId), eq(personalRecords.exerciseId, exerciseId)));
-    return rows[0];
-  },
-  async upsertPersonalRecord(data) {
-    const existing = await storage.getPersonalRecord(data.userId, data.exerciseId);
-    if (existing) {
-      if (data.weight > existing.weight || (data.weight === existing.weight && data.reps > existing.reps)) {
-        const rows = await db.update(personalRecords)
-          .set({ weight: data.weight, reps: data.reps, date: data.date })
-          .where(eq(personalRecords.id, existing.id))
-          .returning();
-        return rows[0];
-      }
-      return existing;
-    }
-    const rows = await db.insert(personalRecords).values(data).returning();
     return rows[0];
   },
   async createPersonalRecord(data: InsertPersonalRecord) {
