@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useLocation, useParams } from "wouter";
-import { ArrowLeft, Trophy, Dumbbell, Calendar, Star } from "lucide-react";
+import { ArrowLeft, Trophy, Dumbbell, Calendar, Star, ChevronRight } from "lucide-react";
 import { useLang } from "@/App";
 import { apiRequest } from "@/lib/queryClient";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -37,7 +37,6 @@ export default function FriendProfilePage() {
 
   const friendId = Number(id);
 
-  // GET /api/users/:id returns the user object directly (not wrapped in {user:...})
   const { data: friend, isLoading: friendLoading } = useQuery({
     queryKey: ["/api/users", friendId],
     queryFn: () => apiRequest("GET", `/api/users/${friendId}`).then(r => r.json()),
@@ -66,14 +65,19 @@ export default function FriendProfilePage() {
     );
   }
 
-  const recentWorkouts = (workouts ?? []).slice().sort((a: any, b: any) => b.date.localeCompare(a.date)).slice(0, 20);
+  const recentWorkouts = (workouts ?? [])
+    .slice()
+    .sort((a: any, b: any) => b.date.localeCompare(a.date))
+    .slice(0, 20);
 
   return (
     <div className="min-h-screen px-4 pt-6 pb-28">
       {/* Header */}
       <div className="flex items-center gap-3 mb-5">
-        <button onClick={() => navigate("/friends")}
-          className="w-9 h-9 rounded-xl bg-card border border-card-border flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors">
+        <button
+          onClick={() => navigate("/friends")}
+          className="w-9 h-9 rounded-xl bg-card border border-card-border flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+        >
           <ArrowLeft size={18} />
         </button>
         <h1 className="text-xl font-bold flex-1 truncate">{friend?.name ?? `@${id}`}</h1>
@@ -89,7 +93,9 @@ export default function FriendProfilePage() {
             <div className="font-bold text-base truncate">{friend?.name}</div>
             <div className="text-muted-foreground text-sm">@{friend?.username}</div>
             <div className="mt-1">
-              <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-lg">{goalLabel(friend?.goal, ru)}</span>
+              <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-lg">
+                {goalLabel(friend?.goal, ru)}
+              </span>
             </div>
           </div>
         </div>
@@ -107,12 +113,20 @@ export default function FriendProfilePage() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-muted rounded-xl p-1 mb-4">
-        <button onClick={() => setTab("workouts")}
-          className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${tab === "workouts" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}>
+        <button
+          onClick={() => setTab("workouts")}
+          className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+            tab === "workouts" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
+          }`}
+        >
           {ru ? "Тренировки" : "Workouts"}
         </button>
-        <button onClick={() => setTab("records")}
-          className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${tab === "records" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}>
+        <button
+          onClick={() => setTab("records")}
+          className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+            tab === "records" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
+          }`}
+        >
           {ru ? "Рекорды" : "Records"}
         </button>
       </div>
@@ -120,7 +134,9 @@ export default function FriendProfilePage() {
       {/* Workouts tab */}
       {tab === "workouts" && (
         workoutsLoading ? (
-          <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}</div>
+          <div className="space-y-2">
+            {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}
+          </div>
         ) : recentWorkouts.length === 0 ? (
           <div className="bg-card border border-card-border rounded-2xl p-8 text-center">
             <Dumbbell size={28} className="mx-auto mb-2 text-muted-foreground" />
@@ -129,7 +145,11 @@ export default function FriendProfilePage() {
         ) : (
           <div className="space-y-2">
             {recentWorkouts.map((w: any) => (
-              <div key={w.id} className="bg-card border border-card-border rounded-2xl p-3 flex items-center gap-3">
+              <button
+                key={w.id}
+                className="w-full bg-card border border-card-border rounded-2xl p-3 flex items-center gap-3 text-left hover:bg-card/80 active:scale-[0.99] transition-all"
+                onClick={() => navigate(`/friends/${id}/workout/${w.id}`)}
+              >
                 <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
                   <Dumbbell size={16} className="text-primary" />
                 </div>
@@ -140,8 +160,8 @@ export default function FriendProfilePage() {
                     {w.durationMinutes ? ` · ${w.durationMinutes} ${ru ? "мин" : "min"}` : ""}
                   </div>
                 </div>
-                <Calendar size={14} className="text-muted-foreground flex-shrink-0" />
-              </div>
+                <ChevronRight size={14} className="text-muted-foreground flex-shrink-0" />
+              </button>
             ))}
           </div>
         )
@@ -150,7 +170,9 @@ export default function FriendProfilePage() {
       {/* Records tab */}
       {tab === "records" && (
         recordsLoading ? (
-          <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}</div>
+          <div className="space-y-2">
+            {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}
+          </div>
         ) : (records?.length ?? 0) === 0 ? (
           <div className="bg-card border border-card-border rounded-2xl p-8 text-center">
             <Trophy size={28} className="mx-auto mb-2 text-muted-foreground" />
@@ -161,13 +183,17 @@ export default function FriendProfilePage() {
             {records.map((rec: any) => (
               <div key={rec.id} className="bg-card border border-card-border rounded-2xl p-3 flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-yellow-500/10 flex items-center justify-center flex-shrink-0">
-                  {rec.reps === 1 ? <Star size={18} className="text-yellow-400" /> : <Trophy size={18} className="text-yellow-400" />}
+                  {rec.reps === 1
+                    ? <Star size={18} className="text-yellow-400" />
+                    : <Trophy size={18} className="text-yellow-400" />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-sm truncate">{exName(rec.exercise, lang)}</div>
                   <div className="flex items-center gap-2 mt-0.5">
                     <span className="text-primary font-semibold text-sm">{rec.weight} кг × {rec.reps}</span>
-                    {rec.reps === 1 && <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded-md font-bold">1RM</span>}
+                    {rec.reps === 1 && (
+                      <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded-md font-bold">1RM</span>
+                    )}
                     <span className={`text-xs ${muscleGroupColors[rec.exercise?.muscleGroup] ?? "text-muted-foreground"}`}>
                       {rec.exercise?.muscleGroup}
                     </span>
