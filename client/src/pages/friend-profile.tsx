@@ -37,9 +37,10 @@ export default function FriendProfilePage() {
 
   const friendId = Number(id);
 
+  // GET /api/users/:id returns the user object directly (not wrapped in {user:...})
   const { data: friend, isLoading: friendLoading } = useQuery({
     queryKey: ["/api/users", friendId],
-    queryFn: () => apiRequest("GET", `/api/auth/me/${friendId}`).then(r => r.json()),
+    queryFn: () => apiRequest("GET", `/api/users/${friendId}`).then(r => r.json()),
     enabled: !!friendId,
   });
 
