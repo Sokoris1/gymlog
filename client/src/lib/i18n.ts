@@ -195,7 +195,6 @@ export const translations = {
     trainingDays:   { ru: "тренировочных дней/нед.", en: "training days/week" },
     createTitle:    { ru: "Новый шаблон", en: "New Template" },
     namePlaceholder:{ ru: "Название шаблона", en: "Template name" },
-    createHint:     { ru: "Добавить упражнения можно при старте тренировки по этому шаблону.", en: "You can add exercises when starting a workout from this template." },
     createBtn:      { ru: "Создать шаблон", en: "Create Template" },
   },
 
