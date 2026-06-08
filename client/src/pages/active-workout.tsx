@@ -14,7 +14,6 @@ import { exerciseNameRu } from "@/lib/exerciseNames";
 
 // ─── Timer ────────────────────────────────────────────────────────────────────
 function useTimer(running: boolean, startTime: Date | null) {
-  // Initialize from startTime so timer survives navigation
   const getElapsed = () => {
     if (!startTime) return 0;
     return Math.floor((Date.now() - startTime.getTime()) / 1000);
@@ -22,7 +21,6 @@ function useTimer(running: boolean, startTime: Date | null) {
   const [seconds, setSeconds] = useState(getElapsed);
   useEffect(() => {
     if (!running) return;
-    // Sync to real elapsed time immediately on mount
     setSeconds(getElapsed());
     const id = setInterval(() => setSeconds(getElapsed()), 1000);
     return () => clearInterval(id);
@@ -31,6 +29,12 @@ function useTimer(running: boolean, startTime: Date | null) {
 }
 
 function formatTime(s: number) {
+  if (s >= 3600) {
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+  }
   const m = Math.floor(s / 60);
   const sec = s % 60;
   return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
@@ -46,7 +50,6 @@ function NumInput({ value, onChange, onBlur, placeholder, testId, step, min, max
     if (e.target.value === "0" || e.target.value === "0.0") {
       onChange("");
     } else {
-      // Select all on focus for easy replacement
       e.target.select();
     }
   };
@@ -78,7 +81,6 @@ function SetRow({ set, index, onComplete, onUpdate, onDelete, lang }: any) {
   const [reps, setReps] = useState(String(set.reps ?? 0));
   const [rpe, setRpe] = useState(set.rpe ? String(set.rpe) : "");
 
-  // Keep local state in sync when set data changes from outside
   useEffect(() => { setWeight(String(set.weight ?? 0)); }, [set.weight]);
   useEffect(() => { setReps(String(set.reps ?? 0)); }, [set.reps]);
   useEffect(() => { setRpe(set.rpe ? String(set.rpe) : ""); }, [set.rpe]);
@@ -143,7 +145,6 @@ function ExerciseBlock({
     <div data-testid={`exercise-block-${we.id}`} className="bg-card border border-card-border rounded-2xl overflow-hidden">
       {/* Header */}
       <div className="px-3 py-2.5 border-b border-card-border flex items-center gap-2">
-        {/* Reorder buttons */}
         <div className="flex flex-col gap-0.5 flex-shrink-0">
           <button
             onClick={onMoveUp} disabled={index === 0}
@@ -168,7 +169,6 @@ function ExerciseBlock({
             {t(`exercises.muscles.${we.exercise?.muscleGroup}` as any, lang)} · {t(`exercises.equip.${we.exercise?.equipment}` as any, lang)}
           </div>
         </div>
-        {/* Delete exercise button */}
         <button
           onClick={() => setShowDeleteConfirm(true)}
           className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors flex-shrink-0">
@@ -241,9 +241,9 @@ export default function ActiveWorkoutPage() {
   const { toast } = useToast();
   const workoutId = Number(params?.id);
   const [showAddExercise, setShowAddExercise] = useState(false);
+  const [showFinishConfirm, setShowFinishConfirm] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [muscleFilter, setMuscleFilter] = useState("");
-  // Local order state for reordering without server round-trips
   const [exerciseOrder, setExerciseOrder] = useState<number[]>([]);
   const { startTime: workoutStartTime } = getActiveWorkout();
   const workoutSeconds = useTimer(true, workoutStartTime);
@@ -255,7 +255,6 @@ export default function ActiveWorkoutPage() {
     refetchInterval: false,
   });
 
-  // Sync local order when data arrives
   useEffect(() => {
     if (workoutData?.exercises) {
       setExerciseOrder(workoutData.exercises.map((we: any) => we.id));
@@ -310,6 +309,15 @@ export default function ActiveWorkoutPage() {
     },
   });
 
+  const handleFinishClick = () => {
+    setShowFinishConfirm(true);
+  };
+
+  const handleFinishConfirm = () => {
+    setShowFinishConfirm(false);
+    finishWorkout.mutate();
+  };
+
   const handleSetComplete = (set: any) => {
     updateSet.mutate({ id: set.id, data: { isCompleted: !set.isCompleted } });
   };
@@ -321,7 +329,7 @@ export default function ActiveWorkoutPage() {
       setNumber: currentSets.length + 1,
       weight: lastSet?.weight ?? 0,
       reps: lastSet?.reps ?? 0,
-      rpe: lastSet?.rpe ?? null,   // ← carry over RPE from last set
+      rpe: lastSet?.rpe ?? null,
       isCompleted: false,
     });
   };
@@ -351,7 +359,6 @@ export default function ActiveWorkoutPage() {
 
   const rawExercises: any[] = workoutData?.exercises ?? [];
 
-  // Apply local order
   const workoutExercises = exerciseOrder.length > 0
     ? exerciseOrder.map(id => rawExercises.find(we => we.id === id)).filter(Boolean)
     : rawExercises;
@@ -378,7 +385,7 @@ export default function ActiveWorkoutPage() {
             </div>
           </div>
           <Button data-testid="button-finish-workout" size="sm" className="rounded-xl font-semibold"
-            onClick={() => finishWorkout.mutate()} disabled={finishWorkout.isPending}>
+            onClick={handleFinishClick} disabled={finishWorkout.isPending}>
             {finishWorkout.isPending ? t("active.saving", lang) : t("active.finish", lang)}
           </Button>
         </div>
@@ -419,16 +426,39 @@ export default function ActiveWorkoutPage() {
         </button>
       </div>
 
-
       {/* Bottom Finish Bar */}
       <div className="fixed bottom-0 left-0 right-0 bg-sidebar border-t border-sidebar-border p-4 safe-bottom">
         <Button data-testid="button-finish-bar" className="w-full h-12 font-semibold"
-          onClick={() => finishWorkout.mutate()} disabled={finishWorkout.isPending}>
+          onClick={handleFinishClick} disabled={finishWorkout.isPending}>
           {finishWorkout.isPending
             ? t("active.saving", lang)
             : `${t("active.finishBar", lang)} · ${formatTime(workoutSeconds)}`}
         </Button>
       </div>
+
+      {/* Finish Workout Confirmation */}
+      {showFinishConfirm && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[200] p-4">
+          <div className="bg-card border border-card-border rounded-2xl p-5 w-full max-w-sm">
+            <h3 className="font-semibold text-base mb-2">
+              {ru ? "Завершить тренировку?" : "Finish workout?"}
+            </h3>
+            <p className="text-muted-foreground text-sm mb-4">
+              {ru
+                ? `Тренировка длилась ${formatTime(workoutSeconds)}. Вы уверены, что хотите завершить?`
+                : `Workout duration: ${formatTime(workoutSeconds)}. Are you sure you want to finish?`}
+            </p>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => setShowFinishConfirm(false)}>
+                {ru ? "Отмена" : "Cancel"}
+              </Button>
+              <Button className="flex-1" onClick={handleFinishConfirm}>
+                {ru ? "Завершить" : "Finish"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add Exercise Dialog */}
       <Dialog open={showAddExercise} onOpenChange={setShowAddExercise}>
