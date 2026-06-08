@@ -8,16 +8,23 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { setActiveWorkout } from "@/lib/store";
+import { setActiveWorkout, getActiveWorkout } from "@/lib/store";
 import { useToast } from "@/hooks/use-toast";
 import { exerciseNameRu } from "@/lib/exerciseNames";
 
 // ─── Timer ────────────────────────────────────────────────────────────────────
-function useTimer(running: boolean) {
-  const [seconds, setSeconds] = useState(0);
+function useTimer(running: boolean, startTime: Date | null) {
+  // Initialize from startTime so timer survives navigation
+  const getElapsed = () => {
+    if (!startTime) return 0;
+    return Math.floor((Date.now() - startTime.getTime()) / 1000);
+  };
+  const [seconds, setSeconds] = useState(getElapsed);
   useEffect(() => {
-    if (!running) { setSeconds(0); return; }
-    const id = setInterval(() => setSeconds(s => s + 1), 1000);
+    if (!running) return;
+    // Sync to real elapsed time immediately on mount
+    setSeconds(getElapsed());
+    const id = setInterval(() => setSeconds(getElapsed()), 1000);
     return () => clearInterval(id);
   }, [running]);
   return seconds;
@@ -30,10 +37,6 @@ function formatTime(s: number) {
 }
 
 // ─── Rest Timer ───────────────────────────────────────────────────────────────
-function RestTimer({ onDismiss, lang }: { onDismiss: () => void; lang: string }) {
-  const [seconds, setSeconds] = useState(90);
-  useEffect(() => {
-    if (seconds <= 0) { onDismiss(); return; }
     const id = setInterval(() => setSeconds(s => s - 1), 1000);
     return () => clearInterval(id);
   }, [seconds]);
@@ -254,12 +257,12 @@ export default function ActiveWorkoutPage() {
   const { toast } = useToast();
   const workoutId = Number(params?.id);
   const [showAddExercise, setShowAddExercise] = useState(false);
-  const [showRestTimer, setShowRestTimer] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [muscleFilter, setMuscleFilter] = useState("");
   // Local order state for reordering without server round-trips
   const [exerciseOrder, setExerciseOrder] = useState<number[]>([]);
-  const workoutSeconds = useTimer(true);
+  const { startTime: workoutStartTime } = getActiveWorkout();
+  const workoutSeconds = useTimer(true, workoutStartTime);
 
   const { data: workoutData, isLoading } = useQuery({
     queryKey: ["/api/workout", workoutId],
@@ -330,7 +333,6 @@ export default function ActiveWorkoutPage() {
 
   const handleSetComplete = (set: any) => {
     updateSet.mutate({ id: set.id, data: { isCompleted: !set.isCompleted } });
-    if (!set.isCompleted) setShowRestTimer(true);
   };
 
   const handleAddSet = (workoutExerciseId: number, currentSets: any[]) => {
@@ -438,7 +440,6 @@ export default function ActiveWorkoutPage() {
         </button>
       </div>
 
-      {showRestTimer && <RestTimer lang={lang} onDismiss={() => setShowRestTimer(false)} />}
 
       {/* Bottom Finish Bar */}
       <div className="fixed bottom-0 left-0 right-0 bg-sidebar border-t border-sidebar-border p-4 safe-bottom">
