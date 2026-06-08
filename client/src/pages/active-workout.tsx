@@ -36,22 +36,6 @@ function formatTime(s: number) {
   return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
 }
 
-// ─── Rest Timer ───────────────────────────────────────────────────────────────
-    const id = setInterval(() => setSeconds(s => s - 1), 1000);
-    return () => clearInterval(id);
-  }, [seconds]);
-  return (
-    <div className="fixed bottom-24 left-4 right-4 bg-primary text-primary-foreground rounded-2xl p-4 flex items-center justify-between shadow-lg z-50">
-      <div className="flex items-center gap-2">
-        <Timer size={18} />
-        <span className="font-semibold">{t("active.restTimer", lang as any)}: {formatTime(seconds)}</span>
-      </div>
-      <Button variant="ghost" size="sm" className="text-primary-foreground hover:bg-primary-foreground/10" onClick={onDismiss}>
-        {t("active.skip", lang as any)}
-      </Button>
-    </div>
-  );
-}
 
 // ─── Number Input — clears zero on focus, saves on blur ───────────────────────
 function NumInput({ value, onChange, onBlur, placeholder, testId, step, min, max }: {
