@@ -451,6 +451,59 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
+  // Manual create record
+  app.post("/api/prs", async (req, res) => {
+    try {
+      const { userId, exerciseId, weight, reps, date } = req.body;
+      if (!userId || !exerciseId || weight == null || reps == null || !date)
+        return res.status(400).json({ error: "Missing fields" });
+      const rows = await storage.createPersonalRecord({ userId, exerciseId, weight: Number(weight), reps: Number(reps), date });
+      res.json(rows);
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  // Delete record
+  app.delete("/api/prs/:id", async (req, res) => {
+    try {
+      await storage.deletePersonalRecord(Number(req.params.id));
+      res.json({ ok: true });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  // Best sets per exercise from history (for picking from history)
+  app.get("/api/users/:userId/best-sets", async (req, res) => {
+    try {
+      const uid = Number(req.params.userId);
+      const workouts = await storage.getUserWorkouts(uid);
+      const bestMap: Record<number, { exerciseId: number; weight: number; reps: number; date: string }> = {};
+      for (const w of workouts) {
+        const full = await storage.getWorkout(w.id);
+        for (const we of full?.exercises ?? []) {
+          for (const s of we.sets ?? []) {
+            if (!s.isCompleted) continue;
+            const prev = bestMap[we.exerciseId];
+            if (!prev || s.weight > prev.weight || (s.weight === prev.weight && s.reps > prev.reps)) {
+              bestMap[we.exerciseId] = { exerciseId: we.exerciseId, weight: s.weight, reps: s.reps, date: w.date };
+            }
+          }
+        }
+      }
+      const result = await Promise.all(Object.values(bestMap).map(async b => ({
+        ...b,
+        exercise: await storage.getExercise(b.exerciseId),
+      })));
+      res.json(result);
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  // Public workouts for a user (for friend profile)
+  app.get("/api/users/:userId/workouts", async (req, res) => {
+    try {
+      const workouts = await storage.getUserWorkouts(Number(req.params.userId));
+      res.json(workouts);
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
   // ─── Training Events ─────────────────────────────────────────────────────
   app.get("/api/events/:userId", async (req, res) => {
     try { res.json(await storage.getTrainingEvents(Number(req.params.userId))); }

@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { UserPlus, Check, X, Users } from "lucide-react";
+import { UserPlus, Check, X, Users, ChevronRight } from "lucide-react";
 import { useAuth } from "@/App";
+import { useLocation } from "wouter";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -12,6 +13,7 @@ export default function FriendsPage() {
   const { userId } = useAuth();
   const { toast } = useToast();
   const [showAddFriend, setShowAddFriend] = useState(false);
+  const [, navigate] = useLocation();
 
   // My outgoing friendships
   const { data: friends, isLoading } = useQuery({
@@ -172,18 +174,21 @@ export default function FriendsPage() {
         ) : (
           <div className="space-y-2">
             {accepted.map((f: any) => (
-              <div key={f.id} data-testid={`friend-card-${f.id}`} className="bg-card border border-card-border rounded-2xl p-3 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center font-bold text-sm text-primary">
+              <button key={f.id} data-testid={`friend-card-${f.id}`}
+                onClick={() => navigate(`/friends/${f.friendId}`)}
+                className="w-full bg-card border border-card-border rounded-2xl p-3 flex items-center gap-3 hover-elevate text-left">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center font-bold text-sm text-primary flex-shrink-0">
                   {f.friendData?.name?.charAt(0)?.toUpperCase() ?? "?"}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-sm">{f.friendData?.name ?? "Пользователь"}</div>
                   <div className="text-muted-foreground text-xs">@{f.friendData?.username}</div>
                 </div>
-                <span className="text-xs text-primary bg-primary/10 px-2 py-1 rounded-lg capitalize flex-shrink-0">
-                  {goalLabel(f.friendData?.goal)}
-                </span>
-              </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <span className="text-xs text-primary bg-primary/10 px-2 py-1 rounded-lg">{goalLabel(f.friendData?.goal)}</span>
+                  <ChevronRight size={14} className="text-muted-foreground" />
+                </div>
+              </button>
             ))}
           </div>
         )}

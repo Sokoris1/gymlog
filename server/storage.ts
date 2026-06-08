@@ -79,6 +79,8 @@ export interface IStorage {
   getPersonalRecords(userId: number): Promise<PersonalRecord[]>;
   getPersonalRecord(userId: number, exerciseId: number): Promise<PersonalRecord | undefined>;
   upsertPersonalRecord(data: InsertPersonalRecord): Promise<PersonalRecord>;
+  createPersonalRecord(data: InsertPersonalRecord): Promise<PersonalRecord>;
+  deletePersonalRecord(id: number): Promise<void>;
 
   // Exercise progress (sets over time)
   getExerciseProgress(userId: number, exerciseId: number): Promise<Array<{ date: string; maxWeight: number; reps: number }>>;
@@ -284,6 +286,13 @@ export const storage: IStorage = {
     }
     const rows = await db.insert(personalRecords).values(data).returning();
     return rows[0];
+  },
+  async createPersonalRecord(data: InsertPersonalRecord) {
+    const rows = await db.insert(personalRecords).values(data).returning();
+    return rows[0];
+  },
+  async deletePersonalRecord(id: number) {
+    await db.delete(personalRecords).where(eq(personalRecords.id, id));
   },
 
   // ─── Exercise Progress ───────────────────────────────────────────────────
