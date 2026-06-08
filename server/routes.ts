@@ -240,8 +240,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  app.get("/api/exercises/:id", async (req, res) => {
-    try {
+  app.get("/api/exercises/:id", async (req, res) => {try {
       const ex = await storage.getExercise(Number(req.params.id));
       if (!ex) return res.status(404).json({ error: "Not found" });
       res.json(ex);
@@ -341,39 +340,6 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       const result = schema.safeParse(req.body);
       if (!result.success) return res.status(400).json({ error: result.error });
       const w = await storage.updateWorkout(Number(req.params.id), result.data);
-
-      // If workout is being finished, detect PRs
-      if (result.data.endTime) {
-        const workout = await storage.getWorkout(Number(req.params.id));
-        if (workout) {
-          const wExs = await storage.getWorkoutExercises(workout.id);
-          const newPRs: Array<{ exerciseId: number; weight: number; reps: number }> = [];
-          for (const we of wExs) {
-            const wSets = (await storage.getSets(we.id)).filter(s => s.isCompleted);
-            for (const s of wSets) {
-              const existing = await storage.getPersonalRecord(workout.userId, we.exerciseId);
-              if (!existing || s.weight > existing.weight || (s.weight === existing.weight && s.reps > existing.reps)) {
-                await storage.upsertPersonalRecord({
-                  userId: workout.userId,
-                  exerciseId: we.exerciseId,
-                  weight: s.weight,
-                  reps: s.reps,
-                  date: workout.date,
-                });
-                const ex = await storage.getExercise(we.exerciseId);
-                newPRs.push({ exerciseId: we.exerciseId, weight: s.weight, reps: s.reps });
-                await storage.createNotification({
-                  userId: workout.userId,
-                  type: "pr_achieved",
-                  payload: JSON.stringify({ exerciseName: ex?.name, weight: s.weight, reps: s.reps }),
-                  isRead: false,
-                });
-              }
-            }
-          }
-          return res.json({ ...w, newPRs });
-        }
-      }
       res.json(w);
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
