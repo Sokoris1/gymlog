@@ -5,6 +5,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import type { Lang } from "@/lib/i18n";
+import { clearActiveWorkout } from "@/lib/store";
 
 import LoginPage from "@/pages/login";
 import HomePage from "@/pages/home";
@@ -27,7 +28,7 @@ import NotFound from "@/pages/not-found";
 type AuthContextType = {
   userId: number | null;
   user: any;
-  login: (user: any) => void;
+  login: (u: any) => void;
   logout: () => void;
   authLoading: boolean;
 };
@@ -115,9 +116,12 @@ export default function App() {
 
   const login = (u: any) => setUser(u);
   const logout = () => {
+    const leavingUserId = user?.id;
     fetch("/api/auth/logout", { method: "POST", credentials: "include" })
       .catch(() => {})
       .finally(() => {
+        // Clear this user's active workout so the next session starts clean
+        clearActiveWorkout(leavingUserId);
         setUser(null);
         queryClient.clear();
       });

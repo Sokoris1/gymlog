@@ -245,7 +245,9 @@ export default function ActiveWorkoutPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [muscleFilter, setMuscleFilter] = useState("");
   const [exerciseOrder, setExerciseOrder] = useState<number[]>([]);
-  const { startTime: workoutStartTime } = getActiveWorkout();
+
+  // Pass userId so we read the correct scoped entry
+  const { startTime: workoutStartTime } = getActiveWorkout(userId);
   const workoutSeconds = useTimer(true, workoutStartTime);
 
   const { data: workoutData, isLoading } = useQuery({
@@ -310,7 +312,7 @@ export default function ActiveWorkoutPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/workouts", userId] });
       queryClient.invalidateQueries({ queryKey: ["/api/users", userId, "stats"] });
-      setActiveWorkout(null);
+      setActiveWorkout(null, userId);
       navigate("/workout");
     },
   });

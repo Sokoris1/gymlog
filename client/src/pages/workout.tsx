@@ -37,7 +37,7 @@ export default function WorkoutPage() {
     mutationFn: (data: any) => apiRequest("POST", "/api/workouts", data).then(r => r.json()),
     onSuccess: (workout) => {
       queryClient.invalidateQueries({ queryKey: ["/api/workouts", userId] });
-      setActiveWorkout(workout.id);
+      setActiveWorkout(workout.id, userId);
       navigate(`/workout/active/${workout.id}`);
     },
   });
@@ -70,7 +70,7 @@ export default function WorkoutPage() {
     }
 
     queryClient.invalidateQueries({ queryKey: ["/api/workouts", userId] });
-    setActiveWorkout(workout.id);
+    setActiveWorkout(workout.id, userId);
     navigate(`/workout/active/${workout.id}`);
     setShowTemplates(false);
   };
