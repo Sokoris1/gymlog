@@ -39,6 +39,7 @@ export interface IStorage {
   getFriends(userId: number): Promise<Friend[]>;
   getIncomingRequests(userId: number): Promise<Friend[]>;
   getFriendship(userId: number, friendId: number): Promise<Friend | undefined>;
+  getFriendshipById(id: number): Promise<Friend | undefined>;
   createFriendRequest(data: InsertFriend): Promise<Friend>;
   updateFriendStatus(id: number, status: Friend["status"]): Promise<Friend | undefined>;
 
@@ -67,11 +68,13 @@ export interface IStorage {
 
   // Workout Exercises
   getWorkoutExercises(workoutId: number): Promise<WorkoutExercise[]>;
+  getWorkoutExercise(id: number): Promise<WorkoutExercise | undefined>;
   createWorkoutExercise(data: InsertWorkoutExercise): Promise<WorkoutExercise>;
   deleteWorkoutExercise(id: number): Promise<void>;
 
   // Sets
   getSets(workoutExerciseId: number): Promise<Set[]>;
+  getSet(id: number): Promise<Set | undefined>;
   createSet(data: InsertSet): Promise<Set>;
   updateSet(id: number, data: Partial<InsertSet>): Promise<Set | undefined>;
   deleteSet(id: number): Promise<void>;
@@ -92,6 +95,7 @@ export interface IStorage {
 
   // Event Invites
   getEventInvites(userId: number): Promise<EventInvite[]>;
+  getEventInvite(id: number): Promise<EventInvite | undefined>;
   createEventInvite(data: InsertEventInvite): Promise<EventInvite>;
   updateEventInviteStatus(id: number, status: EventInvite["status"]): Promise<EventInvite | undefined>;
 
@@ -128,7 +132,6 @@ export const storage: IStorage = {
     return rows[0];
   },
   async deleteUser(id) {
-    // Delete all user data in order
     const userWorkouts = await db.select().from(workouts).where(eq(workouts.userId, id));
     for (const w of userWorkouts) {
       const wExs = await db.select().from(workoutExercises).where(eq(workoutExercises.workoutId, w.id));
@@ -158,6 +161,10 @@ export const storage: IStorage = {
   async getFriendship(userId, friendId) {
     const rows = await db.select().from(friends)
       .where(and(eq(friends.userId, userId), eq(friends.friendId, friendId)));
+    return rows[0];
+  },
+  async getFriendshipById(id) {
+    const rows = await db.select().from(friends).where(eq(friends.id, id));
     return rows[0];
   },
   async createFriendRequest(data) {
@@ -242,17 +249,27 @@ export const storage: IStorage = {
   async getWorkoutExercises(workoutId) {
     return db.select().from(workoutExercises).where(eq(workoutExercises.workoutId, workoutId));
   },
+  async getWorkoutExercise(id) {
+    const rows = await db.select().from(workoutExercises).where(eq(workoutExercises.id, id));
+    return rows[0];
+  },
   async createWorkoutExercise(data) {
     const rows = await db.insert(workoutExercises).values(data).returning();
     return rows[0];
   },
   async deleteWorkoutExercise(id) {
+    // Delete all sets belonging to this workout exercise first
+    await db.delete(sets).where(eq(sets.workoutExerciseId, id));
     await db.delete(workoutExercises).where(eq(workoutExercises.id, id));
   },
 
   // ─── Sets ─────────────────────────────────────────────────────────────────
   async getSets(workoutExerciseId) {
     return db.select().from(sets).where(eq(sets.workoutExerciseId, workoutExerciseId));
+  },
+  async getSet(id) {
+    const rows = await db.select().from(sets).where(eq(sets.id, id));
+    return rows[0];
   },
   async createSet(data) {
     const rows = await db.insert(sets).values(data).returning();
@@ -322,6 +339,10 @@ export const storage: IStorage = {
   // ─── Event Invites ───────────────────────────────────────────────────────
   async getEventInvites(userId) {
     return db.select().from(eventInvites).where(eq(eventInvites.userId, userId));
+  },
+  async getEventInvite(id) {
+    const rows = await db.select().from(eventInvites).where(eq(eventInvites.id, id));
+    return rows[0];
   },
   async createEventInvite(data) {
     const rows = await db.insert(eventInvites).values(data).returning();
