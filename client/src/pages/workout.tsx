@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Plus, Dumbbell, ChevronRight, Clock, Calendar, LayoutTemplate } from "lucide-react";
+import { Plus, Dumbbell, ChevronRight, Clock, Calendar, LayoutTemplate, Settings2 } from "lucide-react";
 import { useAuth, useLang } from "@/App";
 import { t } from "@/lib/i18n";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -85,7 +85,7 @@ export default function WorkoutPage() {
       </div>
 
       {/* Start buttons */}
-      <div className="grid grid-cols-2 gap-3 mb-6">
+      <div className="grid grid-cols-2 gap-3 mb-3">
         <button data-testid="button-start-blank" onClick={() => setShowNewDialog(true)}
           className="bg-primary text-primary-foreground rounded-2xl p-4 text-left hover-elevate active-elevate">
           <Plus size={20} className="mb-2" />
@@ -99,6 +99,16 @@ export default function WorkoutPage() {
           <div className="text-muted-foreground text-xs mt-0.5">{templates?.length ?? 0} {t("workout.available", lang)}</div>
         </button>
       </div>
+
+      {/* Manage templates button */}
+      <button
+        onClick={() => navigate("/templates")}
+        className="w-full flex items-center gap-2 px-4 py-2.5 mb-6 rounded-xl border border-border text-muted-foreground text-sm hover:text-foreground hover:bg-card transition-colors"
+      >
+        <Settings2 size={15} />
+        <span>{lang === "ru" ? "Управление шаблонами" : "Manage templates"}</span>
+        <ChevronRight size={14} className="ml-auto" />
+      </button>
 
       {/* History */}
       <div>
