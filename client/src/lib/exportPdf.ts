@@ -3,30 +3,31 @@ import autoTable from "jspdf-autotable";
 import { format, parseISO } from "date-fns";
 import { ru as dateFnsRu } from "date-fns/locale";
 
-interface Set {
+interface SetData {
   setNumber: number;
   weight: number | string;
   reps: number | string;
 }
 
-interface WorkoutExercise {
-  exerciseName?: string;
-  sets?: Set[];
+interface ExerciseData {
+  exercise?: { name?: string };
+  sets?: SetData[];
 }
 
-interface Workout {
+interface WorkoutFull {
   id: number;
   name?: string;
   startTime?: string;
   endTime?: string;
-  exercises?: WorkoutExercise[];
+  exercises?: ExerciseData[];
 }
 
 interface PR {
-  exerciseName?: string;
+  exercise?: { name?: string };
   weight: number | string;
   reps: number | string;
   achievedAt?: string;
+  date?: string;
 }
 
 interface Stats {
@@ -49,20 +50,26 @@ export async function exportWorkoutsPdf(
 ) {
   const locale = lang === "ru" ? dateFnsRu : undefined;
 
-  // Fetch data
-  const [workoutsRes, prsRes, statsRes] = await Promise.all([
+  // 1. Fetch list of workouts, PRs, stats in parallel
+  const [workoutsListRes, prsRes, statsRes] = await Promise.all([
     apiRequest("GET", `/api/workouts/${userId}`).then(r => r.json()),
     apiRequest("GET", `/api/prs/${userId}`).then(r => r.json()),
     apiRequest("GET", `/api/users/${userId}/stats`).then(r => r.json()),
   ]);
 
-  const workouts: Workout[] = Array.isArray(workoutsRes) ? workoutsRes : [];
+  const workoutsList: { id: number }[] = Array.isArray(workoutsListRes) ? workoutsListRes : [];
   const prs: PR[] = Array.isArray(prsRes) ? prsRes : [];
   const stats: Stats = statsRes ?? {};
 
+  // 2. Fetch full workout detail (with exercises + sets) for each workout
+  const workouts: WorkoutFull[] = await Promise.all(
+    workoutsList.map(w =>
+      apiRequest("GET", `/api/workout/${w.id}`).then(r => r.json())
+    )
+  );
+
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
-  // ── Helpers ──────────────────────────────────────────────────────────
   const W = doc.internal.pageSize.getWidth();
   const MARGIN = 14;
   const COL = W - MARGIN * 2;
@@ -72,7 +79,7 @@ export async function exportWorkoutsPdf(
   const checkY = (needed: number) => { if (y + needed > 280) addPage(); };
 
   // ── Header ───────────────────────────────────────────────────────────
-  doc.setFillColor(22, 163, 74); // green-600
+  doc.setFillColor(22, 163, 74);
   doc.rect(0, 0, W, 22, "F");
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(16);
@@ -96,7 +103,6 @@ export async function exportWorkoutsPdf(
   doc.text(statItems.join("     "), MARGIN, y);
   y += 6;
 
-  // divider
   doc.setDrawColor(200, 200, 200);
   doc.line(MARGIN, y, W - MARGIN, y);
   y += 6;
@@ -119,7 +125,6 @@ export async function exportWorkoutsPdf(
   for (const w of workouts) {
     checkY(20);
 
-    // workout title bar
     doc.setFillColor(240, 253, 244);
     doc.roundedRect(MARGIN, y, COL, 9, 2, 2, "F");
     doc.setFontSize(10);
@@ -150,7 +155,7 @@ export async function exportWorkoutsPdf(
       doc.setFontSize(9);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(40, 40, 40);
-      doc.text(ex.exerciseName ?? (lang === "ru" ? "Упражнение" : "Exercise"), MARGIN + 3, y);
+      doc.text(ex.exercise?.name ?? (lang === "ru" ? "Упражнение" : "Exercise"), MARGIN + 3, y);
       y += 4;
 
       const rows = (ex.sets ?? []).map((s) => [
@@ -209,12 +214,15 @@ export async function exportWorkoutsPdf(
         lang === "ru" ? "Повторения" : "Reps",
         lang === "ru" ? "Дата" : "Date",
       ]],
-      body: prs.map(p => [
-        p.exerciseName ?? "—",
-        `${p.weight} кг`,
-        String(p.reps),
-        p.achievedAt ? format(parseISO(p.achievedAt), "d MMM yyyy", { locale }) : "—",
-      ]),
+      body: prs.map(p => {
+        const dateStr = p.achievedAt ?? p.date;
+        return [
+          p.exercise?.name ?? "—",
+          `${p.weight} кг`,
+          String(p.reps),
+          dateStr ? format(parseISO(dateStr), "d MMM yyyy", { locale }) : "—",
+        ];
+      }),
       margin: { left: MARGIN, right: MARGIN },
       styles: { fontSize: 9, cellPadding: 2, textColor: [40, 40, 40] },
       headStyles: { fillColor: [22, 163, 74], textColor: 255, fontStyle: "bold" },
