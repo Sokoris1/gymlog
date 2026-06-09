@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Bell, LogOut, Trophy, Dumbbell, Flame, Sun, Moon, Globe, KeyRound, AtSign, Trash2, Eye, EyeOff, ChevronRight, Shield, FileDown } from "lucide-react";
+import { Bell, LogOut, Trophy, Dumbbell, Flame, Sun, Moon, Globe, KeyRound, AtSign, Trash2, Eye, EyeOff, ChevronRight, Shield } from "lucide-react";
 import { useAuth, useTheme, useLang } from "@/App";
 import { useLocation } from "wouter";
 import { t } from "@/lib/i18n";
@@ -12,7 +12,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { format, parseISO } from "date-fns";
 import { ru as dateFnsRu } from "date-fns/locale";
-import { exportWorkoutsPdf } from "@/lib/exportPdf";
 
 export default function ProfilePage() {
   const { userId, user, login, logout } = useAuth();
@@ -25,7 +24,6 @@ export default function ProfilePage() {
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showChangeUsername, setShowChangeUsername] = useState(false);
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
-  const [exportLoading, setExportLoading] = useState(false);
 
   // Change password state
   const [currentPassword, setCurrentPassword] = useState("");
@@ -147,20 +145,6 @@ export default function ProfilePage() {
   const goalLabel = (goal?: string) =>
     t(`profile.goals.${goal ?? "general"}` as any, lang) ?? (lang === "ru" ? "Общий фитнес" : "General Fitness");
 
-  const handleExportPdf = async () => {
-    if (!userId || !user) return;
-    setExportLoading(true);
-    try {
-      await exportWorkoutsPdf(userId, user.username ?? user.name ?? "user", lang, apiRequest);
-      toast({ title: ru ? "PDF сохранён" : "PDF saved" });
-    } catch (e) {
-      console.error(e);
-      toast({ title: ru ? "Ошибка при экспорте" : "Export failed", variant: "destructive" });
-    } finally {
-      setExportLoading(false);
-    }
-  };
-
   return (
     <div className="min-h-screen px-4 pt-6">
       <div className="flex items-center justify-between mb-6">
@@ -242,20 +226,6 @@ export default function ProfilePage() {
           className="w-full flex items-center gap-3 px-4 py-3.5 hover-elevate border-b border-card-border text-left">
           <KeyRound size={18} className="text-muted-foreground" />
           <span className="font-medium text-sm flex-1">{ru ? "Изменить пароль" : "Change password"}</span>
-          <ChevronRight size={14} className="text-muted-foreground" />
-        </button>
-
-        {/* Export PDF */}
-        <button
-          onClick={handleExportPdf}
-          disabled={exportLoading}
-          className="w-full flex items-center gap-3 px-4 py-3.5 hover-elevate border-b border-card-border text-left disabled:opacity-50">
-          <FileDown size={18} className="text-muted-foreground" />
-          <span className="font-medium text-sm flex-1">
-            {exportLoading
-              ? (ru ? "Генерация PDF..." : "Generating PDF...")
-              : (ru ? "Экспорт в PDF" : "Export to PDF")}
-          </span>
           <ChevronRight size={14} className="text-muted-foreground" />
         </button>
 
