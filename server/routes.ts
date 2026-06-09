@@ -355,12 +355,11 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
+  // GET /api/workout/:id — accessible to any authenticated user (needed for friend workout detail view)
   app.get("/api/workout/:id", requireAuth, async (req, res) => {
     try {
       const w = await storage.getWorkout(Number(req.params.id));
       if (!w) return res.status(404).json({ error: "Not found" });
-      const me = (req.user as any).id;
-      if (w.userId !== me) return res.status(403).json({ error: "forbidden" });
       const wExs = await storage.getWorkoutExercises(w.id);
       const exercises = await Promise.all(wExs.map(async we => ({
         ...we,
