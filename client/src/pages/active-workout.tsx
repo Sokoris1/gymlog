@@ -246,7 +246,6 @@ export default function ActiveWorkoutPage() {
   const [muscleFilter, setMuscleFilter] = useState("");
   const [exerciseOrder, setExerciseOrder] = useState<number[]>([]);
 
-  // Pass userId so we read the correct scoped entry
   const { startTime: workoutStartTime } = getActiveWorkout(userId);
   const workoutSeconds = useTimer(true, workoutStartTime);
 
@@ -259,7 +258,6 @@ export default function ActiveWorkoutPage() {
 
   // editMode: тренировка уже завершена (есть endTime), открыта для правок постфактум
   const editMode = !!workoutData?.endTime;
-  // Оригинальная длительность в секундах из БД (используется в editMode)
   const originalDurationSeconds = (workoutData?.durationMinutes ?? 0) * 60;
 
   useEffect(() => {
@@ -302,7 +300,6 @@ export default function ActiveWorkoutPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/workout", workoutId] }),
   });
 
-  // Завершение новой тренировки — считаем реальное время по таймеру
   const finishWorkout = useMutation({
     mutationFn: () => {
       const durationMinutes = Math.round(workoutSeconds / 60);
@@ -317,7 +314,6 @@ export default function ActiveWorkoutPage() {
     },
   });
 
-  // Сохранение правок завершённой тренировки — НЕ трогаем endTime и durationMinutes
   const saveEdits = useMutation({
     mutationFn: () => apiRequest("PATCH", `/api/workout/${workoutId}`, {}).then(r => r.json()),
     onSuccess: () => {
@@ -325,9 +321,20 @@ export default function ActiveWorkoutPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/users", userId, "stats"] });
       const ru = lang === "ru";
       toast({ title: ru ? "Изменения сохранены" : "Changes saved" });
-      navigate("/workout");
+      navigate(`/workout/${workoutId}`);
     },
   });
+
+  // Кнопка "назад":
+  // - editMode: возвращаемся на страницу деталей, store не трогаем
+  // - активная тренировка: уходим на /workout, баннер остаётся (тренировка ещё идёт)
+  const handleBack = () => {
+    if (editMode) {
+      navigate(`/workout/${workoutId}`);
+    } else {
+      navigate("/workout");
+    }
+  };
 
   const handleFinishClick = () => {
     if (editMode) {
@@ -391,20 +398,15 @@ export default function ActiveWorkoutPage() {
     n + (we.sets?.filter((s: any) => s.isCompleted)?.length ?? 0), 0);
 
   const ru = lang === "ru";
-
-  // Что показываем в таймере/счётчике времени
   const displaySeconds = editMode ? originalDurationSeconds : workoutSeconds;
 
-  // Метки для кнопок в зависимости от режима
   const btnFinishLabel = editMode
     ? (ru ? "Сохранить" : "Save")
     : (finishWorkout.isPending ? t("active.saving", lang) : t("active.finish", lang));
 
-  const btnFinishBarLabel = editMode
-    ? (ru ? "Сохранить изменения" : "Save changes")
-    : (finishWorkout.isPending
-        ? t("active.saving", lang)
-        : `${t("active.finishBar", lang)} · ${formatTime(displaySeconds)}`);
+  const btnFinishBarLabel = finishWorkout.isPending
+    ? t("active.saving", lang)
+    : `${t("active.finishBar", lang)} · ${formatTime(displaySeconds)}`;
 
   const isSaving = finishWorkout.isPending || saveEdits.isPending;
 
@@ -413,7 +415,7 @@ export default function ActiveWorkoutPage() {
       {/* Header */}
       <div className="sticky top-0 z-30 bg-background/95 backdrop-blur border-b border-border px-4 py-3">
         <div className="flex items-center gap-3">
-          <button data-testid="button-back" onClick={() => navigate("/workout")}
+          <button data-testid="button-back" onClick={handleBack}
             className="w-9 h-9 rounded-xl bg-card border border-card-border flex items-center justify-center">
             <ChevronLeft size={18} />
           </button>
@@ -473,15 +475,17 @@ export default function ActiveWorkoutPage() {
         </button>
       </div>
 
-      {/* Bottom Bar */}
-      <div className="fixed bottom-0 left-0 right-0 bg-sidebar border-t border-sidebar-border p-4 safe-bottom">
-        <Button data-testid="button-finish-bar" className="w-full h-12 font-semibold"
-          onClick={handleFinishClick} disabled={isSaving}>
-          {isSaving ? t("active.saving", lang) : btnFinishBarLabel}
-        </Button>
-      </div>
+      {/* Bottom bar — скрыт в editMode, там есть кнопка "Сохранить" в хедере */}
+      {!editMode && (
+        <div className="fixed bottom-0 left-0 right-0 bg-sidebar border-t border-sidebar-border p-4 safe-bottom">
+          <Button data-testid="button-finish-bar" className="w-full h-12 font-semibold"
+            onClick={handleFinishClick} disabled={isSaving}>
+            {isSaving ? t("active.saving", lang) : btnFinishBarLabel}
+          </Button>
+        </div>
+      )}
 
-      {/* Finish Workout Confirmation (только для новых тренировок) */}
+      {/* Finish Workout Confirmation */}
       {showFinishConfirm && !editMode && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[200] p-4">
           <div className="bg-card border border-card-border rounded-2xl p-5 w-full max-w-sm">

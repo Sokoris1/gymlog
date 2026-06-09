@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { format, parseISO } from "date-fns";
 import { ru as dateFnsRu } from "date-fns/locale";
 import { exerciseNameRu } from "@/lib/exerciseNames";
-import { setActiveWorkout } from "@/lib/store";
 
 export default function WorkoutDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -71,7 +70,10 @@ export default function WorkoutDetailPage() {
         <div className="flex gap-2">
           <button
             onClick={() => {
-              setActiveWorkout(workout.id);
+              // Navigate directly to edit view — do NOT call setActiveWorkout here.
+              // The active-workout page detects editMode via workoutData.endTime.
+              // Calling setActiveWorkout for a finished workout causes the BottomNav
+              // banner to appear incorrectly.
               navigate(`/workout/active/${workout.id}`);
             }}
             className="w-9 h-9 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary hover:bg-primary/20 transition-colors">
