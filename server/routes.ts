@@ -12,7 +12,6 @@ import { z } from "zod";
 
 const SALT_ROUNDS = 10;
 
-// Strip passwordHash before sending to client
 const safeUser = (u: any) => {
   if (!u) return u;
   const { passwordHash, ...rest } = u;
@@ -25,7 +24,6 @@ export const requireAuth = (req: Request, res: Response, next: NextFunction) => 
   res.status(401).json({ error: "unauthorized" });
 };
 
-// Check that the authenticated user owns the resource by userId field
 const requireOwner = (resourceUserId: number, req: Request, res: Response): boolean => {
   const me = (req.user as any)?.id;
   if (me !== resourceUserId) {
@@ -40,7 +38,6 @@ export async function registerRoutes(httpServer: Server, app: Express) {
 
   // ─── Auth ────────────────────────────────────────────────────────────────
 
-  // Get current session user (called on app load)
   app.get("/api/auth/session", (req, res) => {
     if (req.isAuthenticated()) {
       res.json({ user: safeUser(req.user) });
@@ -192,7 +189,6 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  // User stats
   app.get("/api/users/:id/stats", async (req, res) => {
     try {
       const userId = Number(req.params.id);
@@ -211,6 +207,36 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         totalVolume: Math.round(totalVolume),
         totalPRs: prs.length,
       });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  // ─── Body Weight Logs ─────────────────────────────────────────────────────
+  app.get("/api/users/:userId/body-weight", requireAuth, async (req, res) => {
+    try {
+      const me = (req.user as any).id;
+      if (me !== Number(req.params.userId)) return res.status(403).json({ error: "forbidden" });
+      const logs = await storage.getBodyWeightLogs(me);
+      res.json(logs);
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.post("/api/users/:userId/body-weight", requireAuth, async (req, res) => {
+    try {
+      const me = (req.user as any).id;
+      if (me !== Number(req.params.userId)) return res.status(403).json({ error: "forbidden" });
+      const { weight, date } = req.body;
+      if (!weight || !date) return res.status(400).json({ error: "Missing fields" });
+      const log = await storage.createBodyWeightLog({ userId: me, weight: Number(weight), date });
+      // Also update the current bodyWeight on the user profile
+      await storage.updateUser(me, { bodyWeight: Number(weight) });
+      res.json(log);
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.delete("/api/body-weight/:id", requireAuth, async (req, res) => {
+    try {
+      await storage.deleteBodyWeightLog(Number(req.params.id));
+      res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
@@ -263,7 +289,6 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     try {
       const me = (req.user as any).id;
       const { status } = req.body;
-      // Only the recipient (friendId) can accept/reject
       const friendRecord = await storage.getFriendshipById(Number(req.params.id));
       if (!friendRecord) return res.status(404).json({ error: "Not found" });
       if (friendRecord.friendId !== me) return res.status(403).json({ error: "forbidden" });
@@ -355,7 +380,6 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  // GET /api/workout/:id — accessible to any authenticated user (needed for friend workout detail view)
   app.get("/api/workout/:id", requireAuth, async (req, res) => {
     try {
       const w = await storage.getWorkout(Number(req.params.id));
@@ -425,7 +449,6 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     try {
       const result = insertWorkoutExerciseSchema.safeParse(req.body);
       if (!result.success) return res.status(400).json({ error: result.error });
-      // Verify workout belongs to current user
       const w = await storage.getWorkout(result.data.workoutId);
       if (!w) return res.status(404).json({ error: "Not found" });
       const me = (req.user as any).id;
@@ -550,7 +573,6 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  // Public workouts for a friend profile — only authenticated users can view friends' workouts
   app.get("/api/users/:userId/workouts", requireAuth, async (req, res) => {
     try {
       const workouts = await storage.getWorkouts(Number(req.params.userId));

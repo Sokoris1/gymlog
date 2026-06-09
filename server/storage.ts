@@ -4,7 +4,7 @@ import { eq, and, desc } from "drizzle-orm";
 import {
   users, exercises, workoutTemplates, trainingPrograms, workouts,
   workoutExercises, sets, personalRecords, trainingEvents, eventInvites,
-  notifications, friends,
+  notifications, friends, bodyWeightLogs,
   type User, type InsertUser, type Exercise, type InsertExercise,
   type WorkoutTemplate, type InsertWorkoutTemplate,
   type TrainingProgram, type InsertTrainingProgram,
@@ -16,6 +16,7 @@ import {
   type EventInvite, type InsertEventInvite,
   type Notification, type InsertNotification,
   type Friend, type InsertFriend,
+  type BodyWeightLog, type InsertBodyWeightLog,
 } from "@shared/schema";
 
 if (!process.env.DATABASE_URL) {
@@ -88,6 +89,11 @@ export interface IStorage {
   // Exercise progress (sets over time)
   getExerciseProgress(userId: number, exerciseId: number): Promise<Array<{ date: string; maxWeight: number; reps: number }>>;
 
+  // Body Weight Logs
+  getBodyWeightLogs(userId: number): Promise<BodyWeightLog[]>;
+  createBodyWeightLog(data: InsertBodyWeightLog): Promise<BodyWeightLog>;
+  deleteBodyWeightLog(id: number): Promise<void>;
+
   // Training Events
   getTrainingEvents(userId: number): Promise<TrainingEvent[]>;
   getTrainingEvent(id: number): Promise<TrainingEvent | undefined>;
@@ -142,6 +148,7 @@ export const storage: IStorage = {
     }
     await db.delete(workouts).where(eq(workouts.userId, id));
     await db.delete(personalRecords).where(eq(personalRecords.userId, id));
+    await db.delete(bodyWeightLogs).where(eq(bodyWeightLogs.userId, id));
     await db.delete(friends).where(eq(friends.userId, id));
     await db.delete(friends).where(eq(friends.friendId, id));
     await db.delete(notifications).where(eq(notifications.userId, id));
@@ -258,7 +265,6 @@ export const storage: IStorage = {
     return rows[0];
   },
   async deleteWorkoutExercise(id) {
-    // Delete all sets belonging to this workout exercise first
     await db.delete(sets).where(eq(sets.workoutExerciseId, id));
     await db.delete(workoutExercises).where(eq(workoutExercises.id, id));
   },
@@ -312,6 +318,20 @@ export const storage: IStorage = {
       ORDER BY w.date ASC
     `;
     return rows as Array<{ date: string; maxWeight: number; reps: number }>;
+  },
+
+  // ─── Body Weight Logs ────────────────────────────────────────────────────
+  async getBodyWeightLogs(userId) {
+    return db.select().from(bodyWeightLogs)
+      .where(eq(bodyWeightLogs.userId, userId))
+      .orderBy(bodyWeightLogs.date);
+  },
+  async createBodyWeightLog(data) {
+    const rows = await db.insert(bodyWeightLogs).values(data).returning();
+    return rows[0];
+  },
+  async deleteBodyWeightLog(id) {
+    await db.delete(bodyWeightLogs).where(eq(bodyWeightLogs.id, id));
   },
 
   // ─── Training Events ─────────────────────────────────────────────────────

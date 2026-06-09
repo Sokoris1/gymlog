@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Trophy, TrendingUp, Plus, Trash2, Search, ChevronDown, Star } from "lucide-react";
+import { Trophy, TrendingUp, Plus, Trash2, Search, ChevronDown, Star, Scale } from "lucide-react";
 import { useAuth, useLang } from "@/App";
 import { t } from "@/lib/i18n";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { format, parseISO } from "date-fns";
 import { ru as dateFnsRu } from "date-fns/locale";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { exerciseNameRu } from "@/lib/exerciseNames";
 import { useToast } from "@/hooks/use-toast";
 
@@ -46,11 +46,17 @@ export default function ProgressPage() {
   const ru = lang === "ru";
   const { toast } = useToast();
 
-  const [tab, setTab] = useState<"chart" | "records">("chart");
+  const [tab, setTab] = useState<"bodyweight" | "chart" | "records">("bodyweight");
 
   // ── Chart tab state ──
   const [selectedExerciseId, setSelectedExerciseId] = useState<number | null>(null);
   const [selectedExerciseName, setSelectedExerciseName] = useState("");
+
+  // ── Body weight tab state ──
+  const [showAddWeight, setShowAddWeight] = useState(false);
+  const [newWeight, setNewWeight] = useState("0");
+  const [newWeightDate, setNewWeightDate] = useState(today());
+  const [deleteWeightId, setDeleteWeightId] = useState<number | null>(null);
 
   // ── Records tab state ──
   const [showAddRecord, setShowAddRecord] = useState(false);
@@ -64,6 +70,12 @@ export default function ProgressPage() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
 
   // ── Queries ──
+  const { data: bodyWeightLogs, isLoading: bwLoading } = useQuery({
+    queryKey: ["/api/users", userId, "body-weight"],
+    queryFn: () => apiRequest("GET", `/api/users/${userId}/body-weight`).then(r => r.json()),
+    enabled: !!userId,
+  });
+
   const { data: records, isLoading: recordsLoading } = useQuery({
     queryKey: ["/api/prs", userId],
     queryFn: () => apiRequest("GET", `/api/prs/${userId}`).then(r => r.json()),
@@ -87,7 +99,30 @@ export default function ProgressPage() {
     enabled: !!selectedExerciseId && !!userId,
   });
 
-  // ── Mutations ──
+  // ── Body weight mutations ──
+  const addWeightLog = useMutation({
+    mutationFn: (data: { weight: number; date: string }) =>
+      apiRequest("POST", `/api/users/${userId}/body-weight`, data).then(r => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users", userId, "body-weight"] });
+      toast({ title: ru ? "Вес сохранён" : "Weight saved" });
+      setShowAddWeight(false);
+      setNewWeight("0");
+      setNewWeightDate(today());
+    },
+    onError: () => toast({ title: ru ? "Ошибка" : "Error", variant: "destructive" }),
+  });
+
+  const deleteWeightLog = useMutation({
+    mutationFn: (id: number) => apiRequest("DELETE", `/api/body-weight/${id}`).then(r => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users", userId, "body-weight"] });
+      setDeleteWeightId(null);
+      toast({ title: ru ? "Запись удалена" : "Entry deleted" });
+    },
+  });
+
+  // ── PR mutations ──
   const createRecord = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/prs", data).then(r => r.json()),
     onSuccess: () => {
@@ -129,14 +164,23 @@ export default function ProgressPage() {
     createRecord.mutate({ userId, exerciseId: best.exerciseId, weight: best.weight, reps: best.reps, date: best.date });
   }
 
-  // Already saved exerciseIds (for history mode — skip already saved)
-  const savedIds = new Set((records ?? []).map((r: any) => r.exerciseId));
+  function handleAddWeight() {
+    const w = parseFloat(newWeight.replace(",", "."));
+    if (!w || w <= 0) return toast({ title: ru ? "Введите корректный вес" : "Enter a valid weight", variant: "destructive" });
+    addWeightLog.mutate({ weight: w, date: newWeightDate });
+  }
 
+  const savedIds = new Set((records ?? []).map((r: any) => r.exerciseId));
   const filteredExercises = (exercises ?? []).filter((e: any) =>
     exName(e, lang).toLowerCase().includes(exSearch.toLowerCase())
   );
-
   const selectedExercise = (exercises ?? []).find((e: any) => e.id === manualExerciseId);
+
+  // Body weight chart domain padding
+  const bwData: any[] = bodyWeightLogs ?? [];
+  const bwWeights = bwData.map((l: any) => l.weight);
+  const bwMin = bwWeights.length ? Math.floor(Math.min(...bwWeights) - 2) : 0;
+  const bwMax = bwWeights.length ? Math.ceil(Math.max(...bwWeights) + 2) : 100;
 
   return (
     <div className="min-h-screen px-4 pt-6 pb-28">
@@ -145,18 +189,168 @@ export default function ProgressPage() {
       {/* ── Tabs ── */}
       <div className="flex gap-1 bg-muted rounded-xl p-1 mb-5">
         <button
+          onClick={() => setTab("bodyweight")}
+          className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+            tab === "bodyweight" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
+          }`}
+        >
+          {ru ? "Вес тела" : "Body"}
+        </button>
+        <button
           onClick={() => setTab("chart")}
-          className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${tab === "chart" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}
+          className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+            tab === "chart" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
+          }`}
         >
           {ru ? "График" : "Chart"}
         </button>
         <button
           onClick={() => setTab("records")}
-          className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${tab === "records" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}
+          className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+            tab === "records" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
+          }`}
         >
           {ru ? "Рекорды" : "Records"}
         </button>
       </div>
+
+      {/* ══════════════════ BODY WEIGHT TAB ══════════════════ */}
+      {tab === "bodyweight" && (
+        <div>
+          {/* Header */}
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-muted-foreground text-sm">
+              {bwData.length} {ru ? "записей" : "entries"}
+            </p>
+            <Button size="sm" className="rounded-xl gap-1" onClick={() => setShowAddWeight(true)}>
+              <Plus size={15} /> {ru ? "Добавить" : "Add"}
+            </Button>
+          </div>
+
+          {/* Chart */}
+          {bwLoading ? (
+            <Skeleton className="h-48 w-full rounded-2xl mb-4" />
+          ) : bwData.length === 0 ? (
+            <div className="bg-card border border-card-border rounded-2xl p-8 text-center mb-4">
+              <Scale size={28} className="mx-auto mb-2 text-muted-foreground" />
+              <p className="text-muted-foreground text-sm">{ru ? "Нет данных о весе" : "No weight data"}</p>
+              <p className="text-muted-foreground text-xs mt-1">
+                {ru ? "Добавьте первую запись чтобы увидеть график" : "Add your first entry to see the chart"}
+              </p>
+            </div>
+          ) : (
+            <div className="bg-card border border-card-border rounded-2xl p-4 mb-4">
+              <div className="text-xs text-muted-foreground mb-3">{ru ? "Динамика веса тела (кг)" : "Body weight over time (kg)"}</div>
+              <ResponsiveContainer width="100%" height={200}>
+                <LineChart data={bwData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                    tickFormatter={v => format(parseISO(v + "T00:00:00"), "d MMM", { locale })}
+                    interval="preserveStartEnd"
+                  />
+                  <YAxis
+                    domain={[bwMin, bwMax]}
+                    tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                    tickFormatter={v => `${v}`}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "hsl(var(--card))",
+                      border: "1px solid hsl(var(--card-border))",
+                      borderRadius: "8px",
+                      fontSize: 12,
+                    }}
+                    formatter={(v: any) => [`${v} кг`, ru ? "Вес" : "Weight"]}
+                    labelFormatter={l => format(parseISO(l + "T00:00:00"), "d MMM yyyy", { locale })}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="weight"
+                    stroke="hsl(var(--primary))"
+                    strokeWidth={2.5}
+                    dot={{ fill: "hsl(var(--primary))", r: 4 }}
+                    activeDot={{ r: 6 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Log list */}
+          {!bwLoading && bwData.length > 0 && (
+            <div className="space-y-2">
+              {[...bwData].reverse().map((log: any) => (
+                <div key={log.id} className="bg-card border border-card-border rounded-2xl p-3 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <Scale size={18} className="text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-sm text-primary">{log.weight} кг</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {format(parseISO(log.date + "T00:00:00"), "d MMMM yyyy", { locale })}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setDeleteWeightId(log.id)}
+                    className="w-8 h-8 rounded-xl bg-red-500/10 flex items-center justify-center text-red-500 hover:bg-red-500/20 transition-colors"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Add weight dialog */}
+          <Dialog open={showAddWeight} onOpenChange={open => { if (!open) { setShowAddWeight(false); setNewWeight("0"); setNewWeightDate(today()); } }}>
+            <DialogContent className="bg-card border-card-border">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Scale size={16} className="text-primary" />
+                  {ru ? "Добавить вес" : "Add weight"}
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3 mt-1">
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">{ru ? "Вес (кг)" : "Weight (kg)"}</label>
+                  <NumInput value={newWeight} onChange={setNewWeight} placeholder="70.0" />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">{ru ? "Дата" : "Date"}</label>
+                  <Input
+                    type="date"
+                    value={newWeightDate}
+                    onChange={e => setNewWeightDate(e.target.value)}
+                    className="bg-background border-border"
+                  />
+                </div>
+                <Button className="w-full" onClick={handleAddWeight} disabled={addWeightLog.isPending}>
+                  {addWeightLog.isPending ? (ru ? "Сохранение..." : "Saving...") : (ru ? "Сохранить" : "Save")}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {/* Delete weight confirm */}
+          {deleteWeightId !== null && (
+            <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[200] p-4">
+              <div className="bg-card border border-card-border rounded-2xl p-5 w-full max-w-sm">
+                <h3 className="font-semibold text-base mb-2">{ru ? "Удалить запись?" : "Delete entry?"}</h3>
+                <p className="text-muted-foreground text-sm mb-4">{ru ? "Это действие нельзя отменить." : "This cannot be undone."}</p>
+                <div className="flex gap-2">
+                  <Button variant="outline" className="flex-1" onClick={() => setDeleteWeightId(null)}>{ru ? "Отмена" : "Cancel"}</Button>
+                  <Button variant="destructive" className="flex-1" disabled={deleteWeightLog.isPending}
+                    onClick={() => deleteWeightLog.mutate(deleteWeightId!)}>
+                    {deleteWeightLog.isPending ? (ru ? "Удаление..." : "Deleting...") : (ru ? "Удалить" : "Delete")}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ══════════════════ CHART TAB ══════════════════ */}
       {tab === "chart" && (
@@ -238,7 +432,6 @@ export default function ProgressPage() {
       {/* ══════════════════ RECORDS TAB ══════════════════ */}
       {tab === "records" && (
         <div>
-          {/* Add button */}
           <div className="flex items-center justify-between mb-4">
             <p className="text-muted-foreground text-sm">{(records?.length ?? 0)} {ru ? "рекордов" : "records"}</p>
             <Button size="sm" className="rounded-xl gap-1" onClick={() => setShowAddRecord(true)}>
@@ -287,7 +480,6 @@ export default function ProgressPage() {
                 <DialogTitle>{ru ? "Добавить рекорд" : "Add Record"}</DialogTitle>
               </DialogHeader>
 
-              {/* Mode switcher */}
               <div className="flex gap-1 bg-muted rounded-xl p-1 mt-1">
                 <button onClick={() => setAddMode("manual")}
                   className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${addMode === "manual" ? "bg-card text-foreground" : "text-muted-foreground"}`}>
@@ -301,7 +493,6 @@ export default function ProgressPage() {
 
               {addMode === "manual" && (
                 <div className="space-y-3 mt-2">
-                  {/* Exercise picker */}
                   <div>
                     <label className="text-xs text-muted-foreground mb-1 block">{ru ? "Упражнение" : "Exercise"}</label>
                     <button
