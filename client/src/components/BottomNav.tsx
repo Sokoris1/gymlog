@@ -5,7 +5,7 @@ import { useAuth } from "@/App";
 import { useLang } from "@/App";
 import { t } from "@/lib/i18n";
 import { apiRequest } from "@/lib/queryClient";
-import { getActiveWorkout } from "@/lib/store";
+import { getActiveWorkout, setActiveWorkout } from "@/lib/store";
 import { useEffect, useState } from "react";
 
 export default function BottomNav() {
@@ -15,15 +15,35 @@ export default function BottomNav() {
   const { lang } = useLang();
   const ru = lang === "ru";
 
-  // Re-check active workout on every render (it may change)
   const [activeId, setActiveId] = useState<number | null>(null);
+
   useEffect(() => {
-    const check = () => setActiveId(getActiveWorkout().id);
+    if (!userId) { setActiveId(null); return; }
+
+    const check = async () => {
+      const { id } = getActiveWorkout(userId);
+      if (id === null) { setActiveId(null); return; }
+
+      // Verify the workout is still open on the server.
+      // If it already has endTime, clear the stale store entry.
+      try {
+        const data = await apiRequest("GET", `/api/workout/${id}`).then(r => r.json());
+        if (data?.endTime) {
+          setActiveWorkout(null, userId);
+          setActiveId(null);
+        } else {
+          setActiveId(id);
+        }
+      } catch {
+        // Network error — keep showing banner to let user navigate back
+        setActiveId(id);
+      }
+    };
+
     check();
-    // Poll every 2s in case it changes from another tab or page
-    const id = setInterval(check, 2000);
-    return () => clearInterval(id);
-  }, []);
+    const interval = setInterval(check, 5000);
+    return () => clearInterval(interval);
+  }, [userId]);
 
   const tabs = [
     { href: "/",         icon: Home,     label: t("nav.home", lang) },
