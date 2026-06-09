@@ -7,7 +7,7 @@ export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   username: text("username").notNull().unique(),
-  passwordHash: text("password_hash"),  // null = old account without password
+  passwordHash: text("password_hash"),
   isAdmin: boolean("is_admin").default(false),
   avatar: text("avatar"),
   bodyWeight: real("body_weight"),
@@ -17,6 +17,18 @@ export const users = pgTable("users", {
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
+
+// ─── Body Weight Logs ─────────────────────────────────────────────────────────
+export const bodyWeightLogs = pgTable("body_weight_logs", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  weight: real("weight").notNull(),
+  date: text("date").notNull(), // ISO date string YYYY-MM-DD
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export const insertBodyWeightLogSchema = createInsertSchema(bodyWeightLogs).omit({ id: true, createdAt: true });
+export type InsertBodyWeightLog = z.infer<typeof insertBodyWeightLogSchema>;
+export type BodyWeightLog = typeof bodyWeightLogs.$inferSelect;
 
 // ─── Friends ─────────────────────────────────────────────────────────────────
 export const friends = pgTable("friends", {
@@ -49,7 +61,7 @@ export const workoutTemplates = pgTable("workout_templates", {
   name: text("name").notNull(),
   isSystem: boolean("is_system").default(false),
   createdByUserId: integer("created_by_user_id"),
-  exerciseIds: text("exercise_ids").notNull().default("[]"), // JSON array
+  exerciseIds: text("exercise_ids").notNull().default("[]"),
 });
 export const insertWorkoutTemplateSchema = createInsertSchema(workoutTemplates).omit({ id: true });
 export type InsertWorkoutTemplate = z.infer<typeof insertWorkoutTemplateSchema>;
@@ -60,7 +72,7 @@ export const trainingPrograms = pgTable("training_programs", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   durationWeeks: integer("duration_weeks").notNull(),
-  days: text("days").notNull().default("[]"), // JSON array of {weekday, templateId}
+  days: text("days").notNull().default("[]"),
   isSystem: boolean("is_system").default(false),
   createdByUserId: integer("created_by_user_id"),
 });
@@ -73,7 +85,7 @@ export const workouts = pgTable("workouts", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull(),
   title: text("title").notNull(),
-  date: text("date").notNull(), // ISO date string
+  date: text("date").notNull(),
   startTime: text("start_time"),
   endTime: text("end_time"),
   notes: text("notes"),
@@ -124,38 +136,4 @@ export type PersonalRecord = typeof personalRecords.$inferSelect;
 
 // ─── Training Events ─────────────────────────────────────────────────────────
 export const trainingEvents = pgTable("training_events", {
-  id: serial("id").primaryKey(),
-  creatorId: integer("creator_id").notNull(),
-  title: text("title").notNull(),
-  description: text("description"),
-  scheduledAt: text("scheduled_at").notNull(),
-  location: text("location"),
-  templateId: integer("template_id"),
-});
-export const insertTrainingEventSchema = createInsertSchema(trainingEvents).omit({ id: true });
-export type InsertTrainingEvent = z.infer<typeof insertTrainingEventSchema>;
-export type TrainingEvent = typeof trainingEvents.$inferSelect;
-
-// ─── Event Invites ───────────────────────────────────────────────────────────
-export const eventInvites = pgTable("event_invites", {
-  id: serial("id").primaryKey(),
-  eventId: integer("event_id").notNull(),
-  userId: integer("user_id").notNull(),
-  status: text("status", { enum: ["pending", "accepted", "declined"] }).default("pending"),
-});
-export const insertEventInviteSchema = createInsertSchema(eventInvites).omit({ id: true });
-export type InsertEventInvite = z.infer<typeof insertEventInviteSchema>;
-export type EventInvite = typeof eventInvites.$inferSelect;
-
-// ─── Notifications ───────────────────────────────────────────────────────────
-export const notifications = pgTable("notifications", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
-  type: text("type", { enum: ["event_invite", "event_reminder", "friend_request", "pr_achieved"] }).notNull(),
-  payload: text("payload").notNull().default("{}"), // JSON
-  isRead: boolean("is_read").default(false),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
-export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true, createdAt: true });
-export type InsertNotification = z.infer<typeof insertNotificationSchema>;
-export type Notification = typeof notifications.$inferSelect;
+  id: serial("
