@@ -136,4 +136,40 @@ export type PersonalRecord = typeof personalRecords.$inferSelect;
 
 // ─── Training Events ─────────────────────────────────────────────────────────
 export const trainingEvents = pgTable("training_events", {
-  id: serial("
+  id: serial("id").primaryKey(),
+  creatorId: integer("creator_id").notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  date: text("date").notNull(),
+  location: text("location"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export const insertTrainingEventSchema = createInsertSchema(trainingEvents).omit({ id: true, createdAt: true });
+export type InsertTrainingEvent = z.infer<typeof insertTrainingEventSchema>;
+export type TrainingEvent = typeof trainingEvents.$inferSelect;
+
+// ─── Event Invites ───────────────────────────────────────────────────────────
+export const eventInvites = pgTable("event_invites", {
+  id: serial("id").primaryKey(),
+  eventId: integer("event_id").notNull(),
+  userId: integer("user_id").notNull(),
+  status: text("status", { enum: ["pending", "accepted", "declined"] }).default("pending"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export const insertEventInviteSchema = createInsertSchema(eventInvites).omit({ id: true, createdAt: true });
+export type InsertEventInvite = z.infer<typeof insertEventInviteSchema>;
+export type EventInvite = typeof eventInvites.$inferSelect;
+
+// ─── Notifications ───────────────────────────────────────────────────────────
+export const notifications = pgTable("notifications", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  type: text("type").notNull(),
+  message: text("message").notNull(),
+  isRead: boolean("is_read").default(false),
+  relatedId: integer("related_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true, createdAt: true });
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+export type Notification = typeof notifications.$inferSelect;
