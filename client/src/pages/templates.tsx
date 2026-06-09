@@ -17,22 +17,18 @@ export default function TemplatesPage() {
   const { lang } = useLang();
   const { toast } = useToast();
 
-  // ── create state
   const [showCreate, setShowCreate] = useState(false);
   const [createName, setCreateName] = useState("");
   const [createExIds, setCreateExIds] = useState<number[]>([]);
 
-  // ── edit state
   const [editTemplate, setEditTemplate] = useState<any>(null);
   const [editName, setEditName] = useState("");
   const [editExIds, setEditExIds] = useState<number[]>([]);
 
-  // ── exercise picker (shared for create & edit)
   const [pickerFor, setPickerFor] = useState<"create" | "edit" | null>(null);
   const [exSearch, setExSearch] = useState("");
   const [muscleFilter, setMuscleFilter] = useState("all");
 
-  // ── detail
   const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
 
   const { data: templates } = useQuery({
@@ -94,7 +90,8 @@ export default function TemplatesPage() {
   const muscleLabel = (mg: string) => t(`exercises.muscles.${mg}` as any, lang) || mg;
 
   const filteredExercises = exercises?.filter((ex: any) => {
-    const matchSearch = ex.name.toLowerCase().includes(exSearch.toLowerCase()) ||
+    const matchSearch =
+      ex.name.toLowerCase().includes(exSearch.toLowerCase()) ||
       (lang === "ru" && (exerciseNameRu[ex.name] ?? "").toLowerCase().includes(exSearch.toLowerCase()));
     const matchMuscle = muscleFilter === "all" || ex.muscleGroup === muscleFilter;
     return matchSearch && matchMuscle;
@@ -160,8 +157,8 @@ export default function TemplatesPage() {
           return (
             <div key={id} className="flex items-center gap-2 bg-background border border-border rounded-lg px-3 py-2">
               <Dumbbell size={13} className="text-primary flex-shrink-0" />
-              <span className="text-sm flex-1">{exName(ex)}</span>
-              <button onClick={() => setExIds(exIds.filter((x: number) => x !== id))} className="text-muted-foreground hover:text-foreground">
+              <span className="text-sm flex-1 min-w-0 truncate">{exName(ex)}</span>
+              <button onClick={() => setExIds(exIds.filter((x: number) => x !== id))} className="text-muted-foreground hover:text-foreground flex-shrink-0">
                 <X size={14} />
               </button>
             </div>
@@ -287,7 +284,7 @@ export default function TemplatesPage() {
               );
               return items.map((ex: any, i: number) => (
                 <div key={i} className="flex items-center gap-2 bg-background border border-border rounded-lg p-2.5">
-                  <div className="w-6 h-6 rounded-md bg-primary/10 flex items-center justify-center">
+                  <div className="w-6 h-6 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
                     <Dumbbell size={12} className="text-primary" />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -304,7 +301,9 @@ export default function TemplatesPage() {
       {/* ── Edit template dialog */}
       <Dialog open={!!editTemplate} onOpenChange={v => { if (!v) setEditTemplate(null); }}>
         <DialogContent className="bg-card border-card-border">
-          <DialogHeader><DialogTitle>{lang === "ru" ? "Редактировать шаблон" : "Edit Template"}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle className="pr-6">{lang === "ru" ? "Редактировать шаблон" : "Edit Template"}</DialogTitle>
+          </DialogHeader>
           <div className="space-y-3">
             <Input
               placeholder={t("templates.namePlaceholder", lang)}
@@ -312,9 +311,7 @@ export default function TemplatesPage() {
               onChange={e => setEditName(e.target.value)}
               className="bg-background border-border"
             />
-
             <SelectedList exIds={editExIds} setExIds={setEditExIds} />
-
             <Button
               variant="outline"
               className="w-full gap-2"
@@ -323,7 +320,6 @@ export default function TemplatesPage() {
               <Plus size={15} />
               {lang === "ru" ? "Добавить упражнения" : "Add Exercises"}
             </Button>
-
             <Button
               className="w-full"
               disabled={updateTemplate.isPending || !editName.trim()}
@@ -346,7 +342,9 @@ export default function TemplatesPage() {
       {/* ── Create template dialog */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
         <DialogContent className="bg-card border-card-border">
-          <DialogHeader><DialogTitle>{t("templates.createTitle", lang)}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle className="pr-6">{t("templates.createTitle", lang)}</DialogTitle>
+          </DialogHeader>
           <div className="space-y-3">
             <Input
               data-testid="input-template-name"
@@ -355,9 +353,7 @@ export default function TemplatesPage() {
               onChange={e => setCreateName(e.target.value)}
               className="bg-background border-border"
             />
-
             <SelectedList exIds={createExIds} setExIds={setCreateExIds} />
-
             <Button
               variant="outline"
               className="w-full gap-2"
@@ -366,7 +362,6 @@ export default function TemplatesPage() {
               <Plus size={15} />
               {lang === "ru" ? "Добавить упражнения" : "Add Exercises"}
             </Button>
-
             <Button
               data-testid="button-save-template"
               className="w-full"
@@ -389,68 +384,67 @@ export default function TemplatesPage() {
 
       {/* ── Shared exercise picker */}
       <Dialog open={pickerFor !== null} onOpenChange={v => { if (!v) setPickerFor(null); }}>
-        <DialogContent className="bg-card border-card-border">
+        <DialogContent className="bg-card border-card-border overflow-hidden">
           <DialogHeader>
-            <DialogTitle>{lang === "ru" ? "Выбрать упражнения" : "Select Exercises"}</DialogTitle>
+            <DialogTitle className="pr-6">
+              {lang === "ru" ? "Выбрать упражнения" : "Select Exercises"}
+            </DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
-            {/* Search */}
-            <div className="relative">
-              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder={lang === "ru" ? "Поиск..." : "Search..."}
-                value={exSearch}
-                onChange={e => setExSearch(e.target.value)}
-                className="pl-8 bg-background border-border"
-              />
-            </div>
 
-            {/* Muscle group filter chips */}
-            <div className="flex gap-1.5 overflow-x-auto pb-1">
+          {/* Search */}
+          <div className="relative">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder={lang === "ru" ? "Поиск..." : "Search..."}
+              value={exSearch}
+              onChange={e => setExSearch(e.target.value)}
+              className="pl-8 bg-background border-border"
+            />
+          </div>
+
+          {/* Muscle group filter chips — negative margin to break out of dialog padding, own px */}
+          <div className="-mx-6 px-6 flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+            <button
+              onClick={() => setMuscleFilter("all")}
+              className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap border transition-colors flex-shrink-0 ${
+                muscleFilter === "all"
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "border-border text-muted-foreground"
+              }`}
+            >
+              {lang === "ru" ? "Все" : "All"}
+            </button>
+            {muscleGroups.map(mg => (
               <button
-                onClick={() => setMuscleFilter("all")}
+                key={mg}
+                onClick={() => setMuscleFilter(muscleFilter === mg ? "all" : mg)}
                 className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap border transition-colors flex-shrink-0 ${
-                  muscleFilter === "all"
+                  muscleFilter === mg
                     ? "bg-primary text-primary-foreground border-primary"
                     : "border-border text-muted-foreground"
                 }`}
               >
-                {lang === "ru" ? "Все" : "All"}
+                {muscleLabel(mg)}
               </button>
-              {muscleGroups.map(mg => (
-                <button
-                  key={mg}
-                  onClick={() => setMuscleFilter(muscleFilter === mg ? "all" : mg)}
-                  className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap border transition-colors flex-shrink-0 ${
-                    muscleFilter === mg
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "border-border text-muted-foreground"
-                  }`}
-                >
-                  {muscleLabel(mg)}
-                </button>
-              ))}
-            </div>
-
-            {/* Exercise list */}
-            <div className="max-h-60 overflow-y-auto space-y-1.5 pr-1">
-              {filteredExercises.length === 0 ? (
-                <p className="text-muted-foreground text-sm text-center py-6">
-                  {lang === "ru" ? "Ничего не найдено" : "Nothing found"}
-                </p>
-              ) : (
-                filteredExercises.map((ex: any) => (
-                  <ExercisePickerRow key={ex.id} id={ex.id} />
-                ))
-              )}
-            </div>
-
-            <Button className="w-full" onClick={() => setPickerFor(null)}>
-              {lang === "ru"
-                ? `Готово (${activeExIds.length})`
-                : `Done (${activeExIds.length})`}
-            </Button>
+            ))}
           </div>
+
+          {/* Exercise list */}
+          <div className="max-h-60 overflow-y-auto space-y-1.5 pr-1">
+            {filteredExercises.length === 0 ? (
+              <p className="text-muted-foreground text-sm text-center py-6">
+                {lang === "ru" ? "Ничего не найдено" : "Nothing found"}
+              </p>
+            ) : (
+              filteredExercises.map((ex: any) => (
+                <ExercisePickerRow key={ex.id} id={ex.id} />
+              ))
+            )}
+          </div>
+
+          <Button className="w-full" onClick={() => setPickerFor(null)}>
+            {lang === "ru" ? `Готово (${activeExIds.length})` : `Done (${activeExIds.length})`}
+          </Button>
         </DialogContent>
       </Dialog>
     </div>
