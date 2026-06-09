@@ -71,7 +71,12 @@ export default function WorkoutDetailPage() {
         <div className="flex gap-2">
           <button
             onClick={() => {
-              setActiveWorkout(workout.id);
+              // Pass userId so the active workout is stored in the correct scoped key.
+              // Since this is an already-finished workout being edited (editMode),
+              // we do NOT want the BottomNav banner to appear — clear any stale entry first,
+              // then set with a special flag. Actually the cleanest fix: don't call
+              // setActiveWorkout at all for finished workouts. active-workout.tsx detects
+              // editMode via workoutData.endTime, so no store entry is needed.
               navigate(`/workout/active/${workout.id}`);
             }}
             className="w-9 h-9 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary hover:bg-primary/20 transition-colors">

@@ -329,6 +329,19 @@ export default function ActiveWorkoutPage() {
     },
   });
 
+  // Кнопка «назад» — для новых тренировок просто уходим, не трогая activeWorkout
+  // (баннер продолжит показываться — тренировка реально не завершена).
+  // Для editMode (завершённых) — просто навигируем назад, store не задействован.
+  const handleBack = () => {
+    if (editMode) {
+      // Завершённая тренировка — просто уходим на детали
+      navigate(`/workout/${workoutId}`);
+    } else {
+      // Незавершённая — уходим, баннер останется, тренировка продолжается
+      navigate("/workout");
+    }
+  };
+
   const handleFinishClick = () => {
     if (editMode) {
       saveEdits.mutate();
@@ -413,7 +426,7 @@ export default function ActiveWorkoutPage() {
       {/* Header */}
       <div className="sticky top-0 z-30 bg-background/95 backdrop-blur border-b border-border px-4 py-3">
         <div className="flex items-center gap-3">
-          <button data-testid="button-back" onClick={() => navigate("/workout")}
+          <button data-testid="button-back" onClick={handleBack}
             className="w-9 h-9 rounded-xl bg-card border border-card-border flex items-center justify-center">
             <ChevronLeft size={18} />
           </button>
@@ -473,13 +486,15 @@ export default function ActiveWorkoutPage() {
         </button>
       </div>
 
-      {/* Bottom Bar */}
-      <div className="fixed bottom-0 left-0 right-0 bg-sidebar border-t border-sidebar-border p-4 safe-bottom">
-        <Button data-testid="button-finish-bar" className="w-full h-12 font-semibold"
-          onClick={handleFinishClick} disabled={isSaving}>
-          {isSaving ? t("active.saving", lang) : btnFinishBarLabel}
-        </Button>
-      </div>
+      {/* Bottom Bar — скрываем в editMode, там нет смысла в отдельной плашке */}
+      {!editMode && (
+        <div className="fixed bottom-0 left-0 right-0 bg-sidebar border-t border-sidebar-border p-4 safe-bottom">
+          <Button data-testid="button-finish-bar" className="w-full h-12 font-semibold"
+            onClick={handleFinishClick} disabled={isSaving}>
+            {isSaving ? t("active.saving", lang) : btnFinishBarLabel}
+          </Button>
+        </div>
+      )}
 
       {/* Finish Workout Confirmation (только для новых тренировок) */}
       {showFinishConfirm && !editMode && (
