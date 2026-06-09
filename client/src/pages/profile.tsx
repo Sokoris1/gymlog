@@ -77,7 +77,7 @@ export default function ProfilePage() {
     mutationFn: () => apiRequest("POST", "/api/auth/change-username", { userId, newUsername: newUsername.trim() }).then(r => r.json()),
     onSuccess: (data) => {
       if (data.user) {
-        login(data.user.id, data.user);
+        login(data.user);
         setShowChangeUsername(false);
         setNewUsername("");
         toast({ title: ru ? "Никнейм изменён" : "Username updated" });
@@ -106,7 +106,7 @@ export default function ProfilePage() {
     mutationFn: () => apiRequest("PATCH", `/api/users/${userId}`, { goal: selectedGoal }).then(r => r.json()),
     onSuccess: (data) => {
       if (data.id) {
-        login(data.id, data);
+        login(data);
         setShowGoalDialog(false);
         toast({ title: ru ? "Цель обновлена" : "Goal updated" });
       } else {
@@ -122,7 +122,7 @@ export default function ProfilePage() {
     },
     onSuccess: (data) => {
       if (data.id) {
-        login(data.id, data);
+        login(data);
         setShowBodyWeightDialog(false);
         toast({ title: ru ? "Вес сохранён" : "Weight saved" });
       } else {
