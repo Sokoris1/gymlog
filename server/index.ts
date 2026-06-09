@@ -5,7 +5,8 @@ import session from "express-session";
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import bcrypt from "bcryptjs";
-import MemoryStore from "memorystore";
+import connectPgSimple from "connect-pg-simple";
+import pg from "pg";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "node:http";
@@ -31,7 +32,9 @@ app.use(
 app.use(express.urlencoded({ extended: false }));
 
 // ─── Session ──────────────────────────────────────────────────────────────────
-const MStore = MemoryStore(session);
+const PgSession = connectPgSimple(session);
+const pgPool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+
 app.use(session({
   secret: process.env.SESSION_SECRET || "gymlog-dev-secret-change-in-prod",
   resave: false,
@@ -42,7 +45,10 @@ app.use(session({
     maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
     sameSite: "lax",
   },
-  store: new MStore({ checkPeriod: 86400000 }),
+  store: new PgSession({
+    pool: pgPool,
+    createTableIfMissing: true,
+  }),
 }));
 
 // ─── Passport ─────────────────────────────────────────────────────────────────
