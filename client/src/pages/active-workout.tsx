@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Check, ChevronLeft, Timer, Search, Trash2, GripVertical, X } from "lucide-react";
+import { Plus, Check, ChevronLeft, Timer, Search, Trash2, GripVertical, X, Pencil } from "lucide-react";
 import { useAuth, useLang } from "@/App";
 import { t } from "@/lib/i18n";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -255,6 +255,11 @@ export default function ActiveWorkoutPage() {
     refetchInterval: false,
   });
 
+  // editMode: тренировка уже завершена (есть endTime), открыта для правок постфактум
+  const editMode = !!workoutData?.endTime;
+  // Оригинальная длительность в секундах из БД (используется в editMode)
+  const originalDurationSeconds = (workoutData?.durationMinutes ?? 0) * 60;
+
   useEffect(() => {
     if (workoutData?.exercises) {
       setExerciseOrder(workoutData.exercises.map((we: any) => we.id));
@@ -295,6 +300,7 @@ export default function ActiveWorkoutPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/workout", workoutId] }),
   });
 
+  // Завершение новой тренировки — считаем реальное время по таймеру
   const finishWorkout = useMutation({
     mutationFn: () => {
       const durationMinutes = Math.round(workoutSeconds / 60);
@@ -309,8 +315,24 @@ export default function ActiveWorkoutPage() {
     },
   });
 
+  // Сохранение правок завершённой тренировки — НЕ трогаем endTime и durationMinutes
+  const saveEdits = useMutation({
+    mutationFn: () => apiRequest("PATCH", `/api/workout/${workoutId}`, {}).then(r => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workouts", userId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/users", userId, "stats"] });
+      const ru = lang === "ru";
+      toast({ title: ru ? "Изменения сохранены" : "Changes saved" });
+      navigate("/workout");
+    },
+  });
+
   const handleFinishClick = () => {
-    setShowFinishConfirm(true);
+    if (editMode) {
+      saveEdits.mutate();
+    } else {
+      setShowFinishConfirm(true);
+    }
   };
 
   const handleFinishConfirm = () => {
@@ -368,6 +390,22 @@ export default function ActiveWorkoutPage() {
 
   const ru = lang === "ru";
 
+  // Что показываем в таймере/счётчике времени
+  const displaySeconds = editMode ? originalDurationSeconds : workoutSeconds;
+
+  // Метки для кнопок в зависимости от режима
+  const btnFinishLabel = editMode
+    ? (ru ? "Сохранить" : "Save")
+    : (finishWorkout.isPending ? t("active.saving", lang) : t("active.finish", lang));
+
+  const btnFinishBarLabel = editMode
+    ? (ru ? "Сохранить изменения" : "Save changes")
+    : (finishWorkout.isPending
+        ? t("active.saving", lang)
+        : `${t("active.finishBar", lang)} · ${formatTime(displaySeconds)}`);
+
+  const isSaving = finishWorkout.isPending || saveEdits.isPending;
+
   return (
     <div className="min-h-screen bg-background pb-36">
       {/* Header */}
@@ -378,15 +416,22 @@ export default function ActiveWorkoutPage() {
             <ChevronLeft size={18} />
           </button>
           <div className="flex-1">
-            <div className="font-semibold text-sm truncate">{workoutData?.title ?? "..."}</div>
+            <div className="flex items-center gap-1.5">
+              <span className="font-semibold text-sm truncate">{workoutData?.title ?? "..."}</span>
+              {editMode && (
+                <span className="text-[10px] font-medium bg-primary/10 text-primary px-1.5 py-0.5 rounded-full flex-shrink-0">
+                  {ru ? "Редактирование" : "Editing"}
+                </span>
+              )}
+            </div>
             <div className="text-muted-foreground text-xs flex items-center gap-2">
-              <Timer size={10} /> {formatTime(workoutSeconds)}
-              <span>· {completedSets} {t("active.setsDone", lang)}</span>
+              <Timer size={10} /> {formatTime(displaySeconds)}
+              {!editMode && <span>· {completedSets} {t("active.setsDone", lang)}</span>}
             </div>
           </div>
           <Button data-testid="button-finish-workout" size="sm" className="rounded-xl font-semibold"
-            onClick={handleFinishClick} disabled={finishWorkout.isPending}>
-            {finishWorkout.isPending ? t("active.saving", lang) : t("active.finish", lang)}
+            onClick={handleFinishClick} disabled={isSaving}>
+            {isSaving ? t("active.saving", lang) : btnFinishLabel}
           </Button>
         </div>
       </div>
@@ -426,18 +471,16 @@ export default function ActiveWorkoutPage() {
         </button>
       </div>
 
-      {/* Bottom Finish Bar */}
+      {/* Bottom Bar */}
       <div className="fixed bottom-0 left-0 right-0 bg-sidebar border-t border-sidebar-border p-4 safe-bottom">
         <Button data-testid="button-finish-bar" className="w-full h-12 font-semibold"
-          onClick={handleFinishClick} disabled={finishWorkout.isPending}>
-          {finishWorkout.isPending
-            ? t("active.saving", lang)
-            : `${t("active.finishBar", lang)} · ${formatTime(workoutSeconds)}`}
+          onClick={handleFinishClick} disabled={isSaving}>
+          {isSaving ? t("active.saving", lang) : btnFinishBarLabel}
         </Button>
       </div>
 
-      {/* Finish Workout Confirmation */}
-      {showFinishConfirm && (
+      {/* Finish Workout Confirmation (только для новых тренировок) */}
+      {showFinishConfirm && !editMode && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[200] p-4">
           <div className="bg-card border border-card-border rounded-2xl p-5 w-full max-w-sm">
             <h3 className="font-semibold text-base mb-2">
