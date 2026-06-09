@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Bell, LogOut, Trophy, Dumbbell, Flame, Sun, Moon, Globe, KeyRound, AtSign, Trash2, Eye, EyeOff, ChevronRight, Shield } from "lucide-react";
+import { Bell, LogOut, Trophy, Dumbbell, Flame, Sun, Moon, Globe, KeyRound, AtSign, Trash2, Eye, EyeOff, ChevronRight, Shield, Target, Weight } from "lucide-react";
 import { useAuth, useTheme, useLang } from "@/App";
 import { useLocation } from "wouter";
 import { t } from "@/lib/i18n";
@@ -13,6 +13,19 @@ import { useToast } from "@/hooks/use-toast";
 import { format, parseISO } from "date-fns";
 import { ru as dateFnsRu } from "date-fns/locale";
 
+const GOALS = ["strength", "hypertrophy", "weight_loss", "general"] as const;
+type Goal = typeof GOALS[number];
+
+function goalLabel(goal: string, ru: boolean): string {
+  const labels: Record<string, [string, string]> = {
+    strength:    ["Сила",           "Strength"],
+    hypertrophy: ["Гипертрофия",    "Hypertrophy"],
+    weight_loss: ["Похудение",      "Weight Loss"],
+    general:     ["Общий фитнес",   "General Fitness"],
+  };
+  return (ru ? labels[goal]?.[0] : labels[goal]?.[1]) ?? (ru ? "Общий фитнес" : "General Fitness");
+}
+
 export default function ProfilePage() {
   const { userId, user, login, logout } = useAuth();
   const [, navigate] = useLocation();
@@ -20,10 +33,18 @@ export default function ProfilePage() {
   const { lang, setLang } = useLang();
   const locale = lang === "ru" ? dateFnsRu : undefined;
   const { toast } = useToast();
+  const ru = lang === "ru";
+
   const [showNotifs, setShowNotifs] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showChangeUsername, setShowChangeUsername] = useState(false);
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
+
+  // My Parameters dialogs
+  const [showGoalDialog, setShowGoalDialog] = useState(false);
+  const [selectedGoal, setSelectedGoal] = useState<Goal>((user?.goal as Goal) ?? "general");
+  const [showBodyWeightDialog, setShowBodyWeightDialog] = useState(false);
+  const [bodyWeightInput, setBodyWeightInput] = useState(user?.bodyWeight ? String(user.bodyWeight) : "");
 
   // Change password state
   const [currentPassword, setCurrentPassword] = useState("");
@@ -36,8 +57,6 @@ export default function ProfilePage() {
 
   // Delete account state
   const [deletePassword, setDeletePassword] = useState("");
-
-  const ru = lang === "ru";
 
   const changePassword = useMutation({
     mutationFn: () => apiRequest("POST", "/api/auth/change-password", { userId, currentPassword, newPassword }).then(r => r.json()),
@@ -83,6 +102,35 @@ export default function ProfilePage() {
     },
   });
 
+  const saveGoal = useMutation({
+    mutationFn: () => apiRequest("PATCH", `/api/users/${userId}`, { goal: selectedGoal }).then(r => r.json()),
+    onSuccess: (data) => {
+      if (data.id) {
+        login(data.id, data);
+        setShowGoalDialog(false);
+        toast({ title: ru ? "Цель обновлена" : "Goal updated" });
+      } else {
+        toast({ title: ru ? "Ошибка" : "Error", variant: "destructive" });
+      }
+    },
+  });
+
+  const saveBodyWeight = useMutation({
+    mutationFn: () => {
+      const val = parseFloat(bodyWeightInput.replace(",", "."));
+      return apiRequest("PATCH", `/api/users/${userId}`, { bodyWeight: val }).then(r => r.json());
+    },
+    onSuccess: (data) => {
+      if (data.id) {
+        login(data.id, data);
+        setShowBodyWeightDialog(false);
+        toast({ title: ru ? "Вес сохранён" : "Weight saved" });
+      } else {
+        toast({ title: ru ? "Ошибка" : "Error", variant: "destructive" });
+      }
+    },
+  });
+
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ["/api/users", userId, "stats"],
     queryFn: () => apiRequest("GET", `/api/users/${userId}/stats`).then(r => r.json()),
@@ -120,30 +168,27 @@ export default function ProfilePage() {
   const notifTitle = (n: any) => {
     const payload = JSON.parse(n.payload ?? "{}");
     if (n.type === "pr_achieved") {
-      return lang === "ru"
+      return ru
         ? `Новый рекорд: ${payload.exerciseName ?? "упражнение"} ${payload.weight}кг × ${payload.reps}`
         : `New PR: ${payload.exerciseName ?? "exercise"} ${payload.weight}kg × ${payload.reps}`;
     }
     if (n.type === "event_invite") {
-      return lang === "ru"
+      return ru
         ? `Приглашение: ${payload.eventTitle ?? "событие"}`
         : `Invited to: ${payload.eventTitle ?? "event"}`;
     }
     if (n.type === "friend_request") {
-      return lang === "ru"
+      return ru
         ? `${payload.fromUserName ?? "Пользователь"} отправил заявку в друзья`
         : `${payload.fromUserName ?? "Someone"} sent a friend request`;
     }
     if (n.type === "event_reminder") {
-      return lang === "ru"
+      return ru
         ? `Напоминание: ${payload.eventTitle ?? "событие"}`
         : `Reminder: ${payload.eventTitle ?? "event"}`;
     }
-    return lang === "ru" ? "Уведомление" : "Notification";
+    return ru ? "Уведомление" : "Notification";
   };
-
-  const goalLabel = (goal?: string) =>
-    t(`profile.goals.${goal ?? "general"}` as any, lang) ?? (lang === "ru" ? "Общий фитнес" : "General Fitness");
 
   return (
     <div className="min-h-screen px-4 pt-6">
@@ -170,7 +215,7 @@ export default function ProfilePage() {
           <div className="text-muted-foreground text-sm">@{user?.username}</div>
           <div className="mt-1">
             <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-              {goalLabel(user?.goal)}
+              {goalLabel(user?.goal ?? "general", ru)}
             </span>
           </div>
         </div>
@@ -192,67 +237,173 @@ export default function ProfilePage() {
         ))}
       </div>
 
-      {/* Settings */}
-      <div className="bg-card border border-card-border rounded-2xl overflow-hidden mb-4">
-        {/* Theme toggle */}
-        <button data-testid="button-toggle-theme" onClick={toggle}
-          className="w-full flex items-center gap-3 px-4 py-3.5 hover-elevate border-b border-card-border text-left">
-          {isDark ? <Moon size={18} className="text-muted-foreground" /> : <Sun size={18} className="text-muted-foreground" />}
-          <span className="font-medium text-sm flex-1">
-            {isDark ? t("profile.darkMode", lang) : t("profile.lightMode", lang)}
-          </span>
-          <span className="text-xs text-muted-foreground">{t("profile.switchTheme", lang)}</span>
-        </button>
-
-        {/* Language toggle */}
-        <button data-testid="button-toggle-lang"
-          onClick={() => setLang(lang === "ru" ? "en" : "ru")}
-          className="w-full flex items-center gap-3 px-4 py-3.5 hover-elevate border-b border-card-border text-left">
-          <Globe size={18} className="text-muted-foreground" />
-          <span className="font-medium text-sm flex-1">{t("profile.language", lang)}</span>
-          <span className="text-xs font-semibold text-primary">{lang === "ru" ? "RU → EN" : "EN → RU"}</span>
-        </button>
-
-        {/* Change username */}
-        <button onClick={() => { setNewUsername(user?.username ?? ""); setShowChangeUsername(true); }}
-          className="w-full flex items-center gap-3 px-4 py-3.5 hover-elevate border-b border-card-border text-left">
-          <AtSign size={18} className="text-muted-foreground" />
-          <span className="font-medium text-sm flex-1">{ru ? "Изменить никнейм" : "Change username"}</span>
-          <ChevronRight size={14} className="text-muted-foreground" />
-        </button>
-
-        {/* Change password */}
-        <button onClick={() => setShowChangePassword(true)}
-          className="w-full flex items-center gap-3 px-4 py-3.5 hover-elevate border-b border-card-border text-left">
-          <KeyRound size={18} className="text-muted-foreground" />
-          <span className="font-medium text-sm flex-1">{ru ? "Изменить пароль" : "Change password"}</span>
-          <ChevronRight size={14} className="text-muted-foreground" />
-        </button>
-
-        {/* Admin panel */}
-        {user?.isAdmin && (
-          <button onClick={() => navigate("/admin")}
-            className="w-full flex items-center gap-3 px-4 py-3.5 hover-elevate border-b border-card-border text-left text-primary">
-            <Shield size={18} />
-            <span className="font-medium text-sm">{ru ? "Панель администратора" : "Admin Panel"}</span>
-            <ChevronRight size={14} className="ml-auto text-muted-foreground" />
+      {/* ── My Parameters ── */}
+      <div className="mb-4">
+        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1 mb-2">
+          {ru ? "Мои параметры" : "My Parameters"}
+        </h2>
+        <div className="bg-card border border-card-border rounded-2xl overflow-hidden">
+          {/* Goal */}
+          <button
+            onClick={() => { setSelectedGoal((user?.goal as Goal) ?? "general"); setShowGoalDialog(true); }}
+            className="w-full flex items-center gap-3 px-4 py-3.5 hover-elevate border-b border-card-border text-left">
+            <Target size={18} className="text-muted-foreground flex-shrink-0" />
+            <span className="font-medium text-sm flex-1">{ru ? "Цель" : "Goal"}</span>
+            <span className="text-xs text-muted-foreground mr-1">{goalLabel(user?.goal ?? "general", ru)}</span>
+            <ChevronRight size={14} className="text-muted-foreground flex-shrink-0" />
           </button>
-        )}
 
-        {/* Logout */}
-        <button data-testid="button-logout" onClick={logout}
-          className="w-full flex items-center gap-3 px-4 py-3.5 hover-elevate border-b border-card-border text-left text-destructive">
-          <LogOut size={18} />
-          <span className="font-medium text-sm">{t("profile.logout", lang)}</span>
-        </button>
-
-        {/* Delete account */}
-        <button onClick={() => { setDeletePassword(""); setShowDeleteAccount(true); }}
-          className="w-full flex items-center gap-3 px-4 py-3.5 hover-elevate text-left text-destructive">
-          <Trash2 size={18} />
-          <span className="font-medium text-sm">{ru ? "Удалить аккаунт" : "Delete account"}</span>
-        </button>
+          {/* Body weight */}
+          <button
+            onClick={() => { setBodyWeightInput(user?.bodyWeight ? String(user.bodyWeight) : ""); setShowBodyWeightDialog(true); }}
+            className="w-full flex items-center gap-3 px-4 py-3.5 hover-elevate text-left">
+            <Weight size={18} className="text-muted-foreground flex-shrink-0" />
+            <span className="font-medium text-sm flex-1">{ru ? "Текущий вес тела" : "Current body weight"}</span>
+            <span className="text-xs text-muted-foreground mr-1">
+              {user?.bodyWeight ? `${user.bodyWeight} кг` : (ru ? "Не указан" : "Not set")}
+            </span>
+            <ChevronRight size={14} className="text-muted-foreground flex-shrink-0" />
+          </button>
+        </div>
       </div>
+
+      {/* Settings */}
+      <div className="mb-4">
+        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1 mb-2">
+          {ru ? "Настройки" : "Settings"}
+        </h2>
+        <div className="bg-card border border-card-border rounded-2xl overflow-hidden">
+          {/* Theme toggle */}
+          <button data-testid="button-toggle-theme" onClick={toggle}
+            className="w-full flex items-center gap-3 px-4 py-3.5 hover-elevate border-b border-card-border text-left">
+            {isDark ? <Moon size={18} className="text-muted-foreground" /> : <Sun size={18} className="text-muted-foreground" />}
+            <span className="font-medium text-sm flex-1">
+              {isDark ? t("profile.darkMode", lang) : t("profile.lightMode", lang)}
+            </span>
+            <span className="text-xs text-muted-foreground">{t("profile.switchTheme", lang)}</span>
+          </button>
+
+          {/* Language toggle */}
+          <button data-testid="button-toggle-lang"
+            onClick={() => setLang(lang === "ru" ? "en" : "ru")}
+            className="w-full flex items-center gap-3 px-4 py-3.5 hover-elevate border-b border-card-border text-left">
+            <Globe size={18} className="text-muted-foreground" />
+            <span className="font-medium text-sm flex-1">{t("profile.language", lang)}</span>
+            <span className="text-xs font-semibold text-primary">{lang === "ru" ? "RU → EN" : "EN → RU"}</span>
+          </button>
+
+          {/* Change username */}
+          <button onClick={() => { setNewUsername(user?.username ?? ""); setShowChangeUsername(true); }}
+            className="w-full flex items-center gap-3 px-4 py-3.5 hover-elevate border-b border-card-border text-left">
+            <AtSign size={18} className="text-muted-foreground" />
+            <span className="font-medium text-sm flex-1">{ru ? "Изменить никнейм" : "Change username"}</span>
+            <ChevronRight size={14} className="text-muted-foreground" />
+          </button>
+
+          {/* Change password */}
+          <button onClick={() => setShowChangePassword(true)}
+            className="w-full flex items-center gap-3 px-4 py-3.5 hover-elevate border-b border-card-border text-left">
+            <KeyRound size={18} className="text-muted-foreground" />
+            <span className="font-medium text-sm flex-1">{ru ? "Изменить пароль" : "Change password"}</span>
+            <ChevronRight size={14} className="text-muted-foreground" />
+          </button>
+
+          {/* Admin panel */}
+          {user?.isAdmin && (
+            <button onClick={() => navigate("/admin")}
+              className="w-full flex items-center gap-3 px-4 py-3.5 hover-elevate border-b border-card-border text-left text-primary">
+              <Shield size={18} />
+              <span className="font-medium text-sm">{ru ? "Панель администратора" : "Admin Panel"}</span>
+              <ChevronRight size={14} className="ml-auto text-muted-foreground" />
+            </button>
+          )}
+
+          {/* Logout */}
+          <button data-testid="button-logout" onClick={logout}
+            className="w-full flex items-center gap-3 px-4 py-3.5 hover-elevate border-b border-card-border text-left text-destructive">
+            <LogOut size={18} />
+            <span className="font-medium text-sm">{t("profile.logout", lang)}</span>
+          </button>
+
+          {/* Delete account */}
+          <button onClick={() => { setDeletePassword(""); setShowDeleteAccount(true); }}
+            className="w-full flex items-center gap-3 px-4 py-3.5 hover-elevate text-left text-destructive">
+            <Trash2 size={18} />
+            <span className="font-medium text-sm">{ru ? "Удалить аккаунт" : "Delete account"}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* ── Goal Dialog ── */}
+      <Dialog open={showGoalDialog} onOpenChange={setShowGoalDialog}>
+        <DialogContent className="bg-card border-card-border">
+          <DialogHeader>
+            <DialogTitle>{ru ? "Цель тренировок" : "Training Goal"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 pt-1">
+            {GOALS.map(g => (
+              <button
+                key={g}
+                onClick={() => setSelectedGoal(g)}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors text-left ${
+                  selectedGoal === g
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border bg-background text-foreground"
+                }`}>
+                <span className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${
+                  selectedGoal === g ? "border-primary" : "border-muted-foreground"
+                }`}>
+                  {selectedGoal === g && <span className="w-2 h-2 rounded-full bg-primary block" />}
+                </span>
+                <span className="font-medium text-sm">{goalLabel(g, ru)}</span>
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-2 pt-2">
+            <Button variant="outline" className="flex-1" onClick={() => setShowGoalDialog(false)}>
+              {ru ? "Отмена" : "Cancel"}
+            </Button>
+            <Button className="flex-1"
+              disabled={saveGoal.isPending}
+              onClick={() => saveGoal.mutate()}>
+              {saveGoal.isPending ? (ru ? "Сохранение..." : "Saving...") : (ru ? "Сохранить" : "Save")}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Body Weight Dialog ── */}
+      <Dialog open={showBodyWeightDialog} onOpenChange={setShowBodyWeightDialog}>
+        <DialogContent className="bg-card border-card-border">
+          <DialogHeader>
+            <DialogTitle>{ru ? "Текущий вес тела" : "Current Body Weight"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-1">
+            <div className="relative">
+              <Input
+                inputMode="decimal"
+                pattern="[0-9]*[.,]?[0-9]*"
+                placeholder={ru ? "Введите вес в кг" : "Enter weight in kg"}
+                value={bodyWeightInput}
+                onChange={e => setBodyWeightInput(e.target.value)}
+                onFocus={e => { if (e.target.value === "0") setBodyWeightInput(""); else e.target.select(); }}
+                className="bg-background border-border pr-10"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">{ru ? "кг" : "kg"}</span>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => setShowBodyWeightDialog(false)}>
+                {ru ? "Отмена" : "Cancel"}
+              </Button>
+              <Button className="flex-1"
+                disabled={saveBodyWeight.isPending || !bodyWeightInput || parseFloat(bodyWeightInput.replace(",", ".")) <= 0}
+                onClick={() => saveBodyWeight.mutate()}>
+                {saveBodyWeight.isPending ? (ru ? "Сохранение..." : "Saving...") : (ru ? "Сохранить" : "Save")}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Change Password Dialog ── */}
       <Dialog open={showChangePassword} onOpenChange={v => { setShowChangePassword(v); if (!v) { setCurrentPassword(""); setNewPassword(""); setConfirmPassword(""); }}}>
