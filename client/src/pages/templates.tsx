@@ -8,6 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { exerciseNameRu } from "@/lib/exerciseNames";
+
+const muscleGroups = ["chest", "back", "legs", "shoulders", "arms", "core"];
 
 export default function TemplatesPage() {
   const { userId } = useAuth();
@@ -27,6 +30,7 @@ export default function TemplatesPage() {
   // ── exercise picker (shared for create & edit)
   const [pickerFor, setPickerFor] = useState<"create" | "edit" | null>(null);
   const [exSearch, setExSearch] = useState("");
+  const [muscleFilter, setMuscleFilter] = useState("all");
 
   // ── detail
   const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
@@ -76,14 +80,25 @@ export default function TemplatesPage() {
     },
   });
 
+  const exName = (ex: any) =>
+    lang === "ru" ? (exerciseNameRu[ex.name] ?? ex.name) : ex.name;
+
   const getExerciseNames = (tpl: any) => {
     const ids: number[] = JSON.parse(tpl?.exerciseIds ?? "[]");
-    return ids.map((id: number) => exercises?.find((ex: any) => ex.id === id)?.name ?? "").filter(Boolean);
+    return ids
+      .map((id: number) => exercises?.find((ex: any) => ex.id === id))
+      .filter(Boolean)
+      .map((ex: any) => exName(ex));
   };
 
-  const filteredExercises = exercises?.filter((ex: any) =>
-    ex.name.toLowerCase().includes(exSearch.toLowerCase())
-  ) ?? [];
+  const muscleLabel = (mg: string) => t(`exercises.muscles.${mg}` as any, lang) || mg;
+
+  const filteredExercises = exercises?.filter((ex: any) => {
+    const matchSearch = ex.name.toLowerCase().includes(exSearch.toLowerCase()) ||
+      (lang === "ru" && (exerciseNameRu[ex.name] ?? "").toLowerCase().includes(exSearch.toLowerCase()));
+    const matchMuscle = muscleFilter === "all" || ex.muscleGroup === muscleFilter;
+    return matchSearch && matchMuscle;
+  }) ?? [];
 
   const activeExIds = pickerFor === "create" ? createExIds : editExIds;
   const setActiveExIds = pickerFor === "create" ? setCreateExIds : setEditExIds;
@@ -98,7 +113,7 @@ export default function TemplatesPage() {
     : ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
   const openCreate = () => {
-    setCreateName(""); setCreateExIds([]); setExSearch(""); setShowCreate(true);
+    setCreateName(""); setCreateExIds([]); setExSearch(""); setMuscleFilter("all"); setShowCreate(true);
   };
 
   const openEdit = (tpl: any) => {
@@ -126,8 +141,8 @@ export default function TemplatesPage() {
           {selected ? <span className="text-xs font-bold">✓</span> : <Dumbbell size={12} className="text-primary" />}
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-medium truncate">{ex.name}</div>
-          <div className="text-xs text-muted-foreground">{ex.muscleGroup}</div>
+          <div className="text-sm font-medium truncate">{exName(ex)}</div>
+          <div className="text-xs text-muted-foreground">{muscleLabel(ex.muscleGroup)}</div>
         </div>
       </button>
     );
@@ -145,7 +160,7 @@ export default function TemplatesPage() {
           return (
             <div key={id} className="flex items-center gap-2 bg-background border border-border rounded-lg px-3 py-2">
               <Dumbbell size={13} className="text-primary flex-shrink-0" />
-              <span className="text-sm flex-1">{ex.name}</span>
+              <span className="text-sm flex-1">{exName(ex)}</span>
               <button onClick={() => setExIds(exIds.filter((x: number) => x !== id))} className="text-muted-foreground hover:text-foreground">
                 <X size={14} />
               </button>
@@ -260,20 +275,28 @@ export default function TemplatesPage() {
             </div>
           </DialogHeader>
           <div className="space-y-1.5 mt-2">
-            {getExerciseNames(selectedTemplate ?? {}).length === 0 ? (
-              <p className="text-muted-foreground text-sm text-center py-4">
-                {lang === "ru" ? "В шаблоне нет упражнений" : "No exercises in this template"}
-              </p>
-            ) : (
-              getExerciseNames(selectedTemplate ?? {}).map((name: string, i: number) => (
+            {(() => {
+              const ids: number[] = JSON.parse(selectedTemplate?.exerciseIds ?? "[]");
+              const items = ids
+                .map((id: number) => exercises?.find((ex: any) => ex.id === id))
+                .filter(Boolean);
+              if (items.length === 0) return (
+                <p className="text-muted-foreground text-sm text-center py-4">
+                  {lang === "ru" ? "В шаблоне нет упражнений" : "No exercises in this template"}
+                </p>
+              );
+              return items.map((ex: any, i: number) => (
                 <div key={i} className="flex items-center gap-2 bg-background border border-border rounded-lg p-2.5">
                   <div className="w-6 h-6 rounded-md bg-primary/10 flex items-center justify-center">
                     <Dumbbell size={12} className="text-primary" />
                   </div>
-                  <span className="text-sm">{name}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium truncate">{exName(ex)}</div>
+                    <div className="text-xs text-muted-foreground">{muscleLabel(ex.muscleGroup)}</div>
+                  </div>
                 </div>
-              ))
-            )}
+              ));
+            })()}
           </div>
         </DialogContent>
       </Dialog>
@@ -295,7 +318,7 @@ export default function TemplatesPage() {
             <Button
               variant="outline"
               className="w-full gap-2"
-              onClick={() => { setExSearch(""); setPickerFor("edit"); }}
+              onClick={() => { setExSearch(""); setMuscleFilter("all"); setPickerFor("edit"); }}
             >
               <Plus size={15} />
               {lang === "ru" ? "Добавить упражнения" : "Add Exercises"}
@@ -338,7 +361,7 @@ export default function TemplatesPage() {
             <Button
               variant="outline"
               className="w-full gap-2"
-              onClick={() => { setExSearch(""); setPickerFor("create"); }}
+              onClick={() => { setExSearch(""); setMuscleFilter("all"); setPickerFor("create"); }}
             >
               <Plus size={15} />
               {lang === "ru" ? "Добавить упражнения" : "Add Exercises"}
@@ -371,6 +394,7 @@ export default function TemplatesPage() {
             <DialogTitle>{lang === "ru" ? "Выбрать упражнения" : "Select Exercises"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
+            {/* Search */}
             <div className="relative">
               <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -380,11 +404,47 @@ export default function TemplatesPage() {
                 className="pl-8 bg-background border-border"
               />
             </div>
-            <div className="max-h-72 overflow-y-auto space-y-1.5 pr-1">
-              {filteredExercises.map((ex: any) => (
-                <ExercisePickerRow key={ex.id} id={ex.id} />
+
+            {/* Muscle group filter chips */}
+            <div className="flex gap-1.5 overflow-x-auto pb-1">
+              <button
+                onClick={() => setMuscleFilter("all")}
+                className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap border transition-colors flex-shrink-0 ${
+                  muscleFilter === "all"
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "border-border text-muted-foreground"
+                }`}
+              >
+                {lang === "ru" ? "Все" : "All"}
+              </button>
+              {muscleGroups.map(mg => (
+                <button
+                  key={mg}
+                  onClick={() => setMuscleFilter(muscleFilter === mg ? "all" : mg)}
+                  className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap border transition-colors flex-shrink-0 ${
+                    muscleFilter === mg
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "border-border text-muted-foreground"
+                  }`}
+                >
+                  {muscleLabel(mg)}
+                </button>
               ))}
             </div>
+
+            {/* Exercise list */}
+            <div className="max-h-60 overflow-y-auto space-y-1.5 pr-1">
+              {filteredExercises.length === 0 ? (
+                <p className="text-muted-foreground text-sm text-center py-6">
+                  {lang === "ru" ? "Ничего не найдено" : "Nothing found"}
+                </p>
+              ) : (
+                filteredExercises.map((ex: any) => (
+                  <ExercisePickerRow key={ex.id} id={ex.id} />
+                ))
+              )}
+            </div>
+
             <Button className="w-full" onClick={() => setPickerFor(null)}>
               {lang === "ru"
                 ? `Готово (${activeExIds.length})`
