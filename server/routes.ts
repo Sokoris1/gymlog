@@ -185,6 +185,18 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       const result = schema.safeParse(req.body);
       if (!result.success) return res.status(400).json({ error: result.error });
       const user = await storage.updateUser(Number(req.params.id), result.data);
+
+      // If bodyWeight was updated from profile — also add a log entry for today
+      if (result.data.bodyWeight != null) {
+        const today = new Date().toISOString().slice(0, 10);
+        try {
+          await storage.upsertBodyWeightLog({ userId: me, weight: result.data.bodyWeight, date: today });
+        } catch (_) {
+          // upsert may not exist yet — fallback: always insert
+          await storage.createBodyWeightLog({ userId: me, weight: result.data.bodyWeight, date: today });
+        }
+      }
+
       res.json(user);
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
@@ -227,7 +239,11 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       const { weight, date } = req.body;
       if (!weight || !date) return res.status(400).json({ error: "Missing fields" });
       const log = await storage.createBodyWeightLog({ userId: me, weight: Number(weight), date });
-      await storage.updateUser(me, { bodyWeight: Number(weight) });
+      // Also keep users.bodyWeight in sync if the log date is today
+      const today = new Date().toISOString().slice(0, 10);
+      if (date === today) {
+        await storage.updateUser(me, { bodyWeight: Number(weight) });
+      }
       res.json(log);
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
