@@ -124,6 +124,8 @@ export default function ProfilePage() {
       if (data.id) {
         login(data);
         setShowBodyWeightDialog(false);
+        // Invalidate body-weight logs so progress chart updates immediately
+        queryClient.invalidateQueries({ queryKey: [`/api/users/${userId}/body-weight`] });
         toast({ title: ru ? "Вес сохранён" : "Weight saved" });
       } else {
         toast({ title: ru ? "Ошибка" : "Error", variant: "destructive" });
