@@ -227,7 +227,6 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       const { weight, date } = req.body;
       if (!weight || !date) return res.status(400).json({ error: "Missing fields" });
       const log = await storage.createBodyWeightLog({ userId: me, weight: Number(weight), date });
-      // Also update the current bodyWeight on the user profile
       await storage.updateUser(me, { bodyWeight: Number(weight) });
       res.json(log);
     } catch (e) { res.status(500).json({ error: String(e) }); }
@@ -278,7 +277,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       await storage.createNotification({
         userId: friendId,
         type: "friend_request",
-        payload: JSON.stringify({ fromUserId: me, fromUserName: sender?.name }),
+        message: `${sender?.name ?? "Someone"} sent you a friend request`,
         isRead: false,
       });
       res.json(f);
@@ -645,7 +644,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       await storage.createNotification({
         userId: inv.userId,
         type: "event_invite",
-        payload: JSON.stringify({ eventTitle: event?.title, eventId: inv.eventId }),
+        message: `You have been invited to: ${event?.title ?? "an event"}`,
         isRead: false,
       });
       res.json(inv);
