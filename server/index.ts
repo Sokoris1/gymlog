@@ -121,7 +121,29 @@ app.use((req, res, next) => {
   next();
 });
 
+// ─── Ensure tables exist ──────────────────────────────────────────────────────
+async function ensureTables() {
+  const client = await pgPool.connect();
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS body_weight_logs (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        weight REAL NOT NULL,
+        date TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )
+    `);
+    log("ensureTables: body_weight_logs OK");
+  } catch (e) {
+    console.error("ensureTables error:", e);
+  } finally {
+    client.release();
+  }
+}
+
 (async () => {
+  await ensureTables();
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
