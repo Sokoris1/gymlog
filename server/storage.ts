@@ -23,8 +23,10 @@ if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL environment variable is required");
 }
 
-const sql = neon(process.env.DATABASE_URL);
-// NOTE: no casing option — DB columns are camelCase (workoutId, userId, etc.)
+const sql = neon(process.env.DATABASE_URL!);
+// IMPORTANT: no casing option — DB columns are snake_case (workout_id, user_id, etc.)
+// drizzle-orm/neon-http default behaviour maps schema camelCase fields to the
+// explicit column names defined in pgTable(), so no casing transform is needed.
 export const db = drizzle(sql);
 
 export interface IStorage {
@@ -323,9 +325,9 @@ export const storage: IStorage = {
     const rows = await sql`
       SELECT w.date, MAX(s.weight) as "maxWeight", s.reps
       FROM workouts w
-      JOIN "workoutExercises" we ON we."workoutId" = w.id
-      JOIN sets s ON s."workoutExerciseId" = we.id
-      WHERE w."userId" = ${userId} AND we."exerciseId" = ${exerciseId} AND s."isCompleted" = true
+      JOIN workout_exercises we ON we.workout_id = w.id
+      JOIN sets s ON s.workout_exercise_id = we.id
+      WHERE w.user_id = ${userId} AND we.exercise_id = ${exerciseId} AND s.is_completed = true
       GROUP BY w.date, s.reps
       ORDER BY w.date ASC
     `;
