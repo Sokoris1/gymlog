@@ -24,7 +24,8 @@ if (!process.env.DATABASE_URL) {
 }
 
 const sql = neon(process.env.DATABASE_URL);
-export const db = drizzle(sql, { casing: "snake_case" });
+// NOTE: no casing option — DB columns are camelCase (workoutId, userId, etc.)
+export const db = drizzle(sql);
 
 export interface IStorage {
   // Users
@@ -71,6 +72,7 @@ export interface IStorage {
   getWorkoutExercises(workoutId: number): Promise<WorkoutExercise[]>;
   getWorkoutExercise(id: number): Promise<WorkoutExercise | undefined>;
   createWorkoutExercise(data: InsertWorkoutExercise): Promise<WorkoutExercise>;
+  updateWorkoutExercise(id: number, data: Partial<InsertWorkoutExercise>): Promise<WorkoutExercise | undefined>;
   deleteWorkoutExercise(id: number): Promise<void>;
 
   // Sets
@@ -112,9 +114,6 @@ export interface IStorage {
   createNotification(data: InsertNotification): Promise<Notification>;
   markNotificationRead(id: number): Promise<void>;
   markAllRead(userId: number): Promise<void>;
-
-  // Workout Exercises (update)
-  updateWorkoutExercise(id: number, data: Partial<InsertWorkoutExercise>): Promise<WorkoutExercise | undefined>;
 }
 
 export const storage: IStorage = {
@@ -253,7 +252,6 @@ export const storage: IStorage = {
     return rows[0];
   },
   async deleteWorkout(id) {
-    // cascade: delete sets → workout_exercises → workout
     const wExs = await db.select().from(workoutExercises).where(eq(workoutExercises.workoutId, id));
     for (const we of wExs) {
       await db.delete(sets).where(eq(sets.workoutExerciseId, we.id));
@@ -325,9 +323,9 @@ export const storage: IStorage = {
     const rows = await sql`
       SELECT w.date, MAX(s.weight) as "maxWeight", s.reps
       FROM workouts w
-      JOIN workout_exercises we ON we.workout_id = w.id
-      JOIN sets s ON s.workout_exercise_id = we.id
-      WHERE w.user_id = ${userId} AND we.exercise_id = ${exerciseId} AND s.is_completed = true
+      JOIN "workoutExercises" we ON we."workoutId" = w.id
+      JOIN sets s ON s."workoutExerciseId" = we.id
+      WHERE w."userId" = ${userId} AND we."exerciseId" = ${exerciseId} AND s."isCompleted" = true
       GROUP BY w.date, s.reps
       ORDER BY w.date ASC
     `;
