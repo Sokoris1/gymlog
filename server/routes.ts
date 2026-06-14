@@ -186,13 +186,11 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       if (!result.success) return res.status(400).json({ error: result.error });
       const user = await storage.updateUser(Number(req.params.id), result.data);
 
-      // If bodyWeight was updated from profile — also add a log entry for today
       if (result.data.bodyWeight != null) {
         const today = new Date().toISOString().slice(0, 10);
         try {
           await storage.upsertBodyWeightLog({ userId: me, weight: result.data.bodyWeight, date: today });
         } catch (_) {
-          // upsert may not exist yet — fallback: always insert
           await storage.createBodyWeightLog({ userId: me, weight: result.data.bodyWeight, date: today });
         }
       }
@@ -239,7 +237,6 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       const { weight, date } = req.body;
       if (!weight || !date) return res.status(400).json({ error: "Missing fields" });
       const log = await storage.createBodyWeightLog({ userId: me, weight: Number(weight), date });
-      // Also keep users.bodyWeight in sync if the log date is today
       const today = new Date().toISOString().slice(0, 10);
       if (date === today) {
         await storage.updateUser(me, { bodyWeight: Number(weight) });
@@ -470,6 +467,20 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       if (w.userId !== me) return res.status(403).json({ error: "forbidden" });
       const we = await storage.createWorkoutExercise(result.data);
       res.json({ ...we, exercise: await storage.getExercise(we.exerciseId), sets: [] });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.patch("/api/workout-exercises/:id", requireAuth, async (req, res) => {
+    try {
+      const we = await storage.getWorkoutExercise(Number(req.params.id));
+      if (!we) return res.status(404).json({ error: "Not found" });
+      const w = await storage.getWorkout(we.workoutId);
+      const me = (req.user as any).id;
+      if (!w || w.userId !== me) return res.status(403).json({ error: "forbidden" });
+      const schema = insertWorkoutExerciseSchema.partial();
+      const result = schema.safeParse(req.body);
+      if (!result.success) return res.status(400).json({ error: result.error });
+      res.json(await storage.updateWorkoutExercise(Number(req.params.id), result.data));
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 

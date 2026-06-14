@@ -23,7 +23,7 @@ export const bodyWeightLogs = pgTable("body_weight_logs", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull(),
   weight: real("weight").notNull(),
-  date: text("date").notNull(), // ISO date string YYYY-MM-DD
+  date: text("date").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 export const insertBodyWeightLogSchema = createInsertSchema(bodyWeightLogs).omit({ id: true, createdAt: true });
@@ -102,6 +102,7 @@ export const workoutExercises = pgTable("workout_exercises", {
   workoutId: integer("workout_id").notNull(),
   exerciseId: integer("exercise_id").notNull(),
   order: integer("order").notNull().default(0),
+  note: text("note"),
 });
 export const insertWorkoutExerciseSchema = createInsertSchema(workoutExercises).omit({ id: true });
 export type InsertWorkoutExercise = z.infer<typeof insertWorkoutExerciseSchema>;

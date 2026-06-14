@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Check, ChevronLeft, Timer, Search, Trash2, GripVertical, X, Pencil } from "lucide-react";
+import { Plus, Check, ChevronLeft, Timer, Search, Trash2, X, Pencil, MessageSquare } from "lucide-react";
 import { useAuth, useLang } from "@/App";
 import { t } from "@/lib/i18n";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -40,18 +40,14 @@ function formatTime(s: number) {
   return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
 }
 
-
-// ─── Number Input — clears zero on focus, saves on blur ───────────────────────
+// ─── Number Input ─────────────────────────────────────────────────────────────
 function NumInput({ value, onChange, onBlur, placeholder, testId, step, min, max }: {
   value: string; onChange: (v: string) => void; onBlur: () => void;
   placeholder?: string; testId?: string; step?: string; min?: string; max?: string;
 }) {
   const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
-    if (e.target.value === "0" || e.target.value === "0.0") {
-      onChange("");
-    } else {
-      e.target.select();
-    }
+    if (e.target.value === "0" || e.target.value === "0.0") onChange("");
+    else e.target.select();
   };
   const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
     if (e.target.value === "" || e.target.value === ".") onChange("0");
@@ -67,9 +63,7 @@ function NumInput({ value, onChange, onBlur, placeholder, testId, step, min, max
       onChange={e => onChange(e.target.value)}
       onFocus={handleFocus}
       onBlur={handleBlur}
-      step={step}
-      min={min}
-      max={max}
+      step={step} min={min} max={max}
       className="w-full bg-background border border-border rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary"
     />
   );
@@ -93,35 +87,18 @@ function SetRow({ set, index, onComplete, onUpdate, onDelete, lang }: any) {
     });
   }, [weight, reps, rpe, onUpdate]);
 
-  const ru = lang === "ru";
-
   return (
     <div data-testid={`set-row-${set.id}`}
       className={`grid grid-cols-[1.5rem_1fr_1fr_1fr_2rem_2rem] gap-1.5 items-center transition-opacity ${set.isCompleted ? "opacity-60" : ""}`}>
       <span className="text-xs font-medium text-muted-foreground text-center">{index + 1}</span>
-      <NumInput
-        testId={`input-weight-${set.id}`}
-        value={weight} onChange={setWeight} onBlur={handleBlur}
-        placeholder="0" min="0" step="0.5"
-      />
-      <NumInput
-        testId={`input-reps-${set.id}`}
-        value={reps} onChange={setReps} onBlur={handleBlur}
-        placeholder="0" min="0"
-      />
-      <NumInput
-        testId={`input-rpe-${set.id}`}
-        value={rpe} onChange={setRpe} onBlur={handleBlur}
-        placeholder="–" min="1" max="10" step="0.5"
-      />
-      <button
-        data-testid={`button-complete-set-${set.id}`}
-        onClick={onComplete}
+      <NumInput testId={`input-weight-${set.id}`} value={weight} onChange={setWeight} onBlur={handleBlur} placeholder="0" min="0" step="0.5" />
+      <NumInput testId={`input-reps-${set.id}`} value={reps} onChange={setReps} onBlur={handleBlur} placeholder="0" min="0" />
+      <NumInput testId={`input-rpe-${set.id}`} value={rpe} onChange={setRpe} onBlur={handleBlur} placeholder="–" min="1" max="10" step="0.5" />
+      <button data-testid={`button-complete-set-${set.id}`} onClick={onComplete}
         className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${set.isCompleted ? "bg-primary text-primary-foreground" : "bg-background border border-border text-muted-foreground"}`}>
         <Check size={13} />
       </button>
-      <button
-        onClick={onDelete}
+      <button onClick={onDelete}
         className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
         <X size={13} />
       </button>
@@ -133,31 +110,32 @@ function SetRow({ set, index, onComplete, onUpdate, onDelete, lang }: any) {
 function ExerciseBlock({
   workoutExercise: we, lang, index, total,
   onAddSet, onSetComplete, onUpdateSet, onDeleteSet,
-  onDeleteExercise, onMoveUp, onMoveDown,
+  onDeleteExercise, onMoveUp, onMoveDown, onUpdateNote,
 }: any) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showNoteDialog, setShowNoteDialog] = useState(false);
+  const [noteInput, setNoteInput] = useState(we.note ?? "");
   const ru = lang === "ru";
   const exName = ru
     ? (exerciseNameRu[we.exercise?.name ?? ""] ?? we.exercise?.name ?? "Exercise")
     : (we.exercise?.name ?? "Exercise");
+
+  const hasNote = !!(we.note && we.note.trim());
 
   return (
     <div data-testid={`exercise-block-${we.id}`} className="bg-card border border-card-border rounded-2xl overflow-hidden">
       {/* Header */}
       <div className="px-3 py-2.5 border-b border-card-border flex items-center gap-2">
         <div className="flex flex-col gap-0.5 flex-shrink-0">
-          <button
-            onClick={onMoveUp} disabled={index === 0}
+          <button onClick={onMoveUp} disabled={index === 0}
             className="w-5 h-4 flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-20 transition-colors">
             <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 5L5 1L9 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
           </button>
-          <button
-            onClick={onMoveDown} disabled={index === total - 1}
+          <button onClick={onMoveDown} disabled={index === total - 1}
             className="w-5 h-4 flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-20 transition-colors">
             <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
           </button>
         </div>
-
         <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
           <span className="text-xs font-bold text-primary">
             {t(`muscleShort.${we.exercise?.muscleGroup}` as any, lang) || "?"}
@@ -169,12 +147,28 @@ function ExerciseBlock({
             {t(`exercises.muscles.${we.exercise?.muscleGroup}` as any, lang)} · {t(`exercises.equip.${we.exercise?.equipment}` as any, lang)}
           </div>
         </div>
+        {/* Note button */}
         <button
-          onClick={() => setShowDeleteConfirm(true)}
+          onClick={() => { setNoteInput(we.note ?? ""); setShowNoteDialog(true); }}
+          className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors flex-shrink-0 ${
+            hasNote
+              ? "bg-primary/10 text-primary border border-primary/20"
+              : "text-muted-foreground hover:text-primary hover:bg-primary/10"
+          }`}>
+          <MessageSquare size={14} />
+        </button>
+        <button onClick={() => setShowDeleteConfirm(true)}
           className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors flex-shrink-0">
           <Trash2 size={14} />
         </button>
       </div>
+
+      {/* Note preview */}
+      {hasNote && (
+        <div className="px-3 py-2 bg-primary/5 border-b border-card-border">
+          <p className="text-xs text-primary/80 leading-relaxed">{we.note}</p>
+        </div>
+      )}
 
       {/* Column headers */}
       <div className="px-3 pt-2 pb-1 grid grid-cols-[1.5rem_1fr_1fr_1fr_2rem_2rem] gap-1.5 text-muted-foreground text-xs font-medium">
@@ -182,30 +176,53 @@ function ExerciseBlock({
         <span className="text-center">{ru ? "кг" : "kg"}</span>
         <span className="text-center">{ru ? "Повт" : "Reps"}</span>
         <span className="text-center">RPE</span>
-        <span></span>
-        <span></span>
+        <span></span><span></span>
       </div>
 
       {/* Sets */}
       <div className="px-3 pb-3 space-y-1.5">
         {(we.sets ?? []).map((set: any, idx: number) => (
           <SetRow
-            key={set.id}
-            set={set}
-            index={idx}
-            lang={lang}
+            key={set.id} set={set} index={idx} lang={lang}
             onComplete={() => onSetComplete(set)}
             onUpdate={(data: any) => onUpdateSet(set.id, data)}
             onDelete={() => onDeleteSet(set.id)}
           />
         ))}
-        <button
-          data-testid={`button-add-set-${we.id}`}
-          onClick={onAddSet}
+        <button data-testid={`button-add-set-${we.id}`} onClick={onAddSet}
           className="w-full py-2 rounded-xl border border-dashed border-border text-muted-foreground text-xs flex items-center justify-center gap-1 hover:border-primary hover:text-primary transition-colors mt-1">
           <Plus size={12} /> {t("active.addSet", lang)}
         </button>
       </div>
+
+      {/* Note dialog */}
+      {showNoteDialog && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[200] p-4">
+          <div className="bg-card border border-card-border rounded-2xl p-5 w-full max-w-sm">
+            <h3 className="font-semibold text-base mb-3">
+              {ru ? "Примечание" : "Note"}
+            </h3>
+            <textarea
+              value={noteInput}
+              onChange={e => setNoteInput(e.target.value)}
+              placeholder={ru ? "Болело плечо, жжение в мышце..." : "Shoulder pain, muscle burn..."}
+              rows={4}
+              className="w-full bg-background border border-border rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+            <div className="flex gap-2 mt-3">
+              <Button variant="outline" className="flex-1" onClick={() => setShowNoteDialog(false)}>
+                {ru ? "Отмена" : "Cancel"}
+              </Button>
+              <Button className="flex-1" onClick={() => {
+                onUpdateNote(noteInput.trim());
+                setShowNoteDialog(false);
+              }}>
+                {ru ? "Сохранить" : "Save"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Delete exercise confirm */}
       {showDeleteConfirm && (
@@ -242,6 +259,8 @@ export default function ActiveWorkoutPage() {
   const workoutId = Number(params?.id);
   const [showAddExercise, setShowAddExercise] = useState(false);
   const [showFinishConfirm, setShowFinishConfirm] = useState(false);
+  const [showRenameDialog, setShowRenameDialog] = useState(false);
+  const [titleInput, setTitleInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [muscleFilter, setMuscleFilter] = useState("");
   const [exerciseOrder, setExerciseOrder] = useState<number[]>([]);
@@ -256,7 +275,6 @@ export default function ActiveWorkoutPage() {
     refetchInterval: false,
   });
 
-  // editMode: тренировка уже завершена (есть endTime), открыта для правок постфактум
   const editMode = !!workoutData?.endTime;
   const originalDurationSeconds = (workoutData?.durationMinutes ?? 0) * 60;
 
@@ -269,6 +287,22 @@ export default function ActiveWorkoutPage() {
   const { data: exercises } = useQuery({
     queryKey: ["/api/exercises"],
     queryFn: () => apiRequest("GET", `/api/exercises`).then(r => r.json()),
+  });
+
+  const renameWorkout = useMutation({
+    mutationFn: (title: string) => apiRequest("PATCH", `/api/workout/${workoutId}`, { title }).then(r => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workout", workoutId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/workouts", userId] });
+      setShowRenameDialog(false);
+      toast({ title: lang === "ru" ? "Название обновлено" : "Title updated" });
+    },
+  });
+
+  const updateNote = useMutation({
+    mutationFn: ({ weId, note }: { weId: number; note: string }) =>
+      apiRequest("PATCH", `/api/workout-exercises/${weId}`, { note: note || null }).then(r => r.json()),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/workout", workoutId] }),
   });
 
   const addExercise = useMutation({
@@ -319,29 +353,19 @@ export default function ActiveWorkoutPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/workouts", userId] });
       queryClient.invalidateQueries({ queryKey: ["/api/users", userId, "stats"] });
-      const ru = lang === "ru";
-      toast({ title: ru ? "Изменения сохранены" : "Changes saved" });
+      toast({ title: lang === "ru" ? "Изменения сохранены" : "Changes saved" });
       navigate(`/workout/${workoutId}`);
     },
   });
 
-  // Кнопка "назад":
-  // - editMode: возвращаемся на страницу деталей, store не трогаем
-  // - активная тренировка: уходим на /workout, баннер остаётся (тренировка ещё идёт)
   const handleBack = () => {
-    if (editMode) {
-      navigate(`/workout/${workoutId}`);
-    } else {
-      navigate("/workout");
-    }
+    if (editMode) navigate(`/workout/${workoutId}`);
+    else navigate("/workout");
   };
 
   const handleFinishClick = () => {
-    if (editMode) {
-      saveEdits.mutate();
-    } else {
-      setShowFinishConfirm(true);
-    }
+    if (editMode) saveEdits.mutate();
+    else setShowFinishConfirm(true);
   };
 
   const handleFinishConfirm = () => {
@@ -389,7 +413,6 @@ export default function ActiveWorkoutPage() {
   }) ?? [];
 
   const rawExercises: any[] = workoutData?.exercises ?? [];
-
   const workoutExercises = exerciseOrder.length > 0
     ? exerciseOrder.map(id => rawExercises.find(we => we.id === id)).filter(Boolean)
     : rawExercises;
@@ -399,16 +422,13 @@ export default function ActiveWorkoutPage() {
 
   const ru = lang === "ru";
   const displaySeconds = editMode ? originalDurationSeconds : workoutSeconds;
-
+  const isSaving = finishWorkout.isPending || saveEdits.isPending;
   const btnFinishLabel = editMode
     ? (ru ? "Сохранить" : "Save")
     : (finishWorkout.isPending ? t("active.saving", lang) : t("active.finish", lang));
-
   const btnFinishBarLabel = finishWorkout.isPending
     ? t("active.saving", lang)
     : `${t("active.finishBar", lang)} · ${formatTime(displaySeconds)}`;
-
-  const isSaving = finishWorkout.isPending || saveEdits.isPending;
 
   return (
     <div className="min-h-screen bg-background pb-36">
@@ -419,9 +439,17 @@ export default function ActiveWorkoutPage() {
             className="w-9 h-9 rounded-xl bg-card border border-card-border flex items-center justify-center">
             <ChevronLeft size={18} />
           </button>
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
-              <span className="font-semibold text-sm truncate">{workoutData?.title ?? "..."}</span>
+              <button
+                onClick={() => { setTitleInput(workoutData?.title ?? ""); setShowRenameDialog(true); }}
+                className="font-semibold text-sm truncate hover:text-primary transition-colors text-left max-w-[160px]"
+                title={ru ? "Переименовать" : "Rename"}
+              >
+                {workoutData?.title ?? "..."}
+              </button>
+              <Pencil size={11} className="text-muted-foreground flex-shrink-0 cursor-pointer"
+                onClick={() => { setTitleInput(workoutData?.title ?? ""); setShowRenameDialog(true); }} />
               {editMode && (
                 <span className="text-[10px] font-medium bg-primary/10 text-primary px-1.5 py-0.5 rounded-full flex-shrink-0">
                   {ru ? "Редактирование" : "Editing"}
@@ -464,6 +492,7 @@ export default function ActiveWorkoutPage() {
               onDeleteExercise={() => deleteExercise.mutate(we.id)}
               onMoveUp={() => handleMoveExercise(we.id, "up")}
               onMoveDown={() => handleMoveExercise(we.id, "down")}
+              onUpdateNote={(note: string) => updateNote.mutate({ weId: we.id, note })}
             />
           ))
         )}
@@ -475,7 +504,7 @@ export default function ActiveWorkoutPage() {
         </button>
       </div>
 
-      {/* Bottom bar — скрыт в editMode, там есть кнопка "Сохранить" в хедере */}
+      {/* Bottom bar */}
       {!editMode && (
         <div className="fixed bottom-0 left-0 right-0 bg-sidebar border-t border-sidebar-border p-4 safe-bottom">
           <Button data-testid="button-finish-bar" className="w-full h-12 font-semibold"
@@ -485,7 +514,36 @@ export default function ActiveWorkoutPage() {
         </div>
       )}
 
-      {/* Finish Workout Confirmation */}
+      {/* Rename Dialog */}
+      {showRenameDialog && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[200] p-4">
+          <div className="bg-card border border-card-border rounded-2xl p-5 w-full max-w-sm">
+            <h3 className="font-semibold text-base mb-3">
+              {ru ? "Переименовать тренировку" : "Rename workout"}
+            </h3>
+            <Input
+              value={titleInput}
+              onChange={e => setTitleInput(e.target.value)}
+              placeholder={ru ? "Название тренировки" : "Workout title"}
+              className="bg-background border-border mb-3"
+              onKeyDown={e => { if (e.key === "Enter" && titleInput.trim()) renameWorkout.mutate(titleInput.trim()); }}
+              autoFocus
+            />
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => setShowRenameDialog(false)}>
+                {ru ? "Отмена" : "Cancel"}
+              </Button>
+              <Button className="flex-1"
+                disabled={!titleInput.trim() || renameWorkout.isPending}
+                onClick={() => renameWorkout.mutate(titleInput.trim())}>
+                {renameWorkout.isPending ? (ru ? "Сохранение..." : "Saving...") : (ru ? "Сохранить" : "Save")}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Finish Confirmation */}
       {showFinishConfirm && !editMode && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[200] p-4">
           <div className="bg-card border border-card-border rounded-2xl p-5 w-full max-w-sm">
