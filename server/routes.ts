@@ -3,7 +3,6 @@ import type { Server } from "http";
 import bcrypt from "bcryptjs";
 import passport from "passport";
 import { storage } from "./storage";
-import { seedDatabase } from "./seed";
 import { insertUserSchema, insertExerciseSchema, insertWorkoutTemplateSchema,
   insertWorkoutSchema, insertWorkoutExerciseSchema, insertSetSchema,
   insertTrainingEventSchema, insertEventInviteSchema, insertNotificationSchema,
@@ -34,7 +33,7 @@ const requireOwner = (resourceUserId: number, req: Request, res: Response): bool
 };
 
 export async function registerRoutes(httpServer: Server, app: Express) {
-  await seedDatabase();
+  // NOTE: seedDatabase() should be called once at startup from index.ts, not here.
 
   // ─── Auth ────────────────────────────────────────────────────────────────
 
@@ -153,19 +152,23 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  app.get("/api/auth/me/:userId", async (req, res) => {
+  // FIX #1: added requireAuth — previously any unauthenticated request could fetch any user's data
+  app.get("/api/auth/me/:userId", requireAuth, async (req, res) => {
     try {
-      const user = await storage.getUser(Number(req.params.userId));
+      const me = (req.user as any).id;
+      if (me !== Number(req.params.userId)) return res.status(403).json({ error: "forbidden" });
+      const user = await storage.getUser(me);
       if (!user) return res.status(404).json({ error: "User not found" });
       res.json({ user: safeUser(user) });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
   // ─── Users ────────────────────────────────────────────────────────────────
-  app.get("/api/users", async (req, res) => {
+  // FIX #2: added requireAuth + safeUser — previously the full user list (with all fields) was public
+  app.get("/api/users", requireAuth, async (req, res) => {
     try {
       const u = await storage.getUsers();
-      res.json(u);
+      res.json(u.map(safeUser));
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
@@ -177,6 +180,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
+  // FIX #10: apply safeUser to response so passwordHash is never sent to the client
   app.patch("/api/users/:id", requireAuth, async (req, res) => {
     try {
       const me = (req.user as any).id;
@@ -188,14 +192,15 @@ export async function registerRoutes(httpServer: Server, app: Express) {
 
       if (result.data.bodyWeight != null) {
         const today = new Date().toISOString().slice(0, 10);
+        // FIX #8: removed fallback create on upsert failure to avoid silent duplicates
         try {
           await storage.upsertBodyWeightLog({ userId: me, weight: result.data.bodyWeight, date: today });
-        } catch (_) {
-          await storage.createBodyWeightLog({ userId: me, weight: result.data.bodyWeight, date: today });
+        } catch (upsertErr) {
+          console.error("upsertBodyWeightLog failed:", upsertErr);
         }
       }
 
-      res.json(user);
+      res.json(safeUser(user));
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
@@ -245,9 +250,14 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
+  // FIX #4: added owner check — previously any authenticated user could delete another user's weight log
   app.delete("/api/body-weight/:id", requireAuth, async (req, res) => {
     try {
-      await storage.deleteBodyWeightLog(Number(req.params.id));
+      const me = (req.user as any).id;
+      const log = await storage.getBodyWeightLogs(me);
+      const entry = log.find(l => l.id === Number(req.params.id));
+      if (!entry) return res.status(404).json({ error: "Not found or not yours" });
+      await storage.deleteBodyWeightLog(entry.id);
       res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
@@ -564,21 +574,26 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
+  // FIX: getPersonalRecord(userId, exerciseId) signature doesn't suit deletion by id;
+  // use getPersonalRecords(userId) and filter by id for correct owner check
   app.delete("/api/prs/:id", requireAuth, async (req, res) => {
     try {
       const me = (req.user as any).id;
-      const pr = await storage.getPersonalRecord(Number(req.params.id));
+      const prId = Number(req.params.id);
+      const allPrs = await storage.getPersonalRecords(me);
+      const pr = allPrs.find(p => p.id === prId);
       if (!pr) return res.status(404).json({ error: "Not found" });
-      if (pr.userId !== me) return res.status(403).json({ error: "forbidden" });
-      await storage.deletePersonalRecord(Number(req.params.id));
+      await storage.deletePersonalRecord(pr.id);
       res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  app.get("/api/users/:userId/best-sets", async (req, res) => {
+  // FIX #3: added requireAuth + owner check — previously any user could view another user's best sets
+  app.get("/api/users/:userId/best-sets", requireAuth, async (req, res) => {
     try {
-      const uid = Number(req.params.userId);
-      const userWorkouts = await storage.getWorkouts(uid);
+      const me = (req.user as any).id;
+      if (me !== Number(req.params.userId)) return res.status(403).json({ error: "forbidden" });
+      const userWorkouts = await storage.getWorkouts(me);
       const bestMap: Record<number, { exerciseId: number; weight: number; reps: number; date: string }> = {};
       for (const w of userWorkouts) {
         const wExs = await storage.getWorkoutExercises(w.id);
@@ -600,9 +615,12 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
+  // FIX #9: added owner check — previously any authenticated user could view another user's workouts
   app.get("/api/users/:userId/workouts", requireAuth, async (req, res) => {
     try {
-      const workouts = await storage.getWorkouts(Number(req.params.userId));
+      const me = (req.user as any).id;
+      if (me !== Number(req.params.userId)) return res.status(403).json({ error: "forbidden" });
+      const workouts = await storage.getWorkouts(me);
       const completed = workouts.filter((w: any) => !!w.endTime);
       res.json(completed);
     } catch (e) { res.status(500).json({ error: String(e) }); }
