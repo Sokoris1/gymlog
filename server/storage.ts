@@ -92,6 +92,7 @@ export interface IStorage {
   // Body Weight Logs
   getBodyWeightLogs(userId: number): Promise<BodyWeightLog[]>;
   createBodyWeightLog(data: InsertBodyWeightLog): Promise<BodyWeightLog>;
+  upsertBodyWeightLog(data: InsertBodyWeightLog): Promise<BodyWeightLog>;
   deleteBodyWeightLog(id: number): Promise<void>;
 
   // Training Events
@@ -111,6 +112,9 @@ export interface IStorage {
   createNotification(data: InsertNotification): Promise<Notification>;
   markNotificationRead(id: number): Promise<void>;
   markAllRead(userId: number): Promise<void>;
+
+  // Workout Exercises (update)
+  updateWorkoutExercise(id: number, data: Partial<InsertWorkoutExercise>): Promise<WorkoutExercise | undefined>;
 }
 
 export const storage: IStorage = {
@@ -249,6 +253,12 @@ export const storage: IStorage = {
     return rows[0];
   },
   async deleteWorkout(id) {
+    // cascade: delete sets → workout_exercises → workout
+    const wExs = await db.select().from(workoutExercises).where(eq(workoutExercises.workoutId, id));
+    for (const we of wExs) {
+      await db.delete(sets).where(eq(sets.workoutExerciseId, we.id));
+    }
+    await db.delete(workoutExercises).where(eq(workoutExercises.workoutId, id));
     await db.delete(workouts).where(eq(workouts.id, id));
   },
 
@@ -262,6 +272,10 @@ export const storage: IStorage = {
   },
   async createWorkoutExercise(data) {
     const rows = await db.insert(workoutExercises).values(data).returning();
+    return rows[0];
+  },
+  async updateWorkoutExercise(id, data) {
+    const rows = await db.update(workoutExercises).set(data).where(eq(workoutExercises.id, id)).returning();
     return rows[0];
   },
   async deleteWorkoutExercise(id) {
@@ -327,6 +341,17 @@ export const storage: IStorage = {
       .orderBy(bodyWeightLogs.date);
   },
   async createBodyWeightLog(data) {
+    const rows = await db.insert(bodyWeightLogs).values(data).returning();
+    return rows[0];
+  },
+  async upsertBodyWeightLog(data) {
+    const existing = await db.select().from(bodyWeightLogs)
+      .where(and(eq(bodyWeightLogs.userId, data.userId), eq(bodyWeightLogs.date, data.date)));
+    if (existing[0]) {
+      const rows = await db.update(bodyWeightLogs).set({ weight: data.weight })
+        .where(eq(bodyWeightLogs.id, existing[0].id)).returning();
+      return rows[0];
+    }
     const rows = await db.insert(bodyWeightLogs).values(data).returning();
     return rows[0];
   },

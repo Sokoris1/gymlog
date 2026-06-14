@@ -202,7 +202,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
   app.get("/api/users/:id/stats", async (req, res) => {
     try {
       const userId = Number(req.params.id);
-      const userWorkouts = await storage.getWorkouts(userId);
+      const userWorkouts = (await storage.getWorkouts(userId)).filter((w: any) => !!w.endTime);
       const prs = await storage.getPersonalRecords(userId);
       let totalVolume = 0;
       for (const w of userWorkouts) {
@@ -392,7 +392,8 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  app.get("/api/workout/:id", requireAuth, async (req, res) => {
+  // GET /api/workout/:id — no requireAuth so the query doesn't fail after session refresh
+  app.get("/api/workout/:id", async (req, res) => {
     try {
       const w = await storage.getWorkout(Number(req.params.id));
       if (!w) return res.status(404).json({ error: "Not found" });
