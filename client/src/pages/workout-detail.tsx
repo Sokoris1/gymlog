@@ -27,9 +27,8 @@ export default function WorkoutDetailPage() {
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [titleInput, setTitleInput] = useState("");
 
-  const { data: workout, isLoading } = useQuery({
-    queryKey: ["/api/workout", id],
-    queryFn: () => apiRequest("GET", `/api/workout/${id}`).then(r => r.json()),
+  const { data: workout, isLoading, isError } = useQuery<any>({
+    queryKey: [`/api/workout/${id}`],
     enabled: !!id,
   });
 
@@ -45,7 +44,7 @@ export default function WorkoutDetailPage() {
   const renameWorkout = useMutation({
     mutationFn: (title: string) => apiRequest("PATCH", `/api/workout/${id}`, { title }).then(r => r.json()),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/workout", id] });
+      queryClient.invalidateQueries({ queryKey: [`/api/workout/${id}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/workouts", userId] });
       setShowRenameDialog(false);
       toast({ title: ru ? "Название обновлено" : "Title updated" });
@@ -62,7 +61,7 @@ export default function WorkoutDetailPage() {
     );
   }
 
-  if (!workout) {
+  if (isError || !workout) {
     return (
       <div className="min-h-screen px-4 pt-6 flex flex-col items-center justify-center text-center">
         <p className="text-muted-foreground">{ru ? "Тренировка не найдена" : "Workout not found"}</p>
