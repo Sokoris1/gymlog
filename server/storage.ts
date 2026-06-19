@@ -88,6 +88,7 @@ export interface IStorage {
   getPersonalRecords(userId: number): Promise<PersonalRecord[]>;
   getPersonalRecord(userId: number, exerciseId: number): Promise<PersonalRecord | undefined>;
   createPersonalRecord(data: InsertPersonalRecord): Promise<PersonalRecord>;
+  upsertPersonalRecord(data: InsertPersonalRecord): Promise<PersonalRecord>;
   deletePersonalRecord(id: number): Promise<void>;
 
   // Exercise progress (sets over time)
@@ -314,6 +315,22 @@ export const storage: IStorage = {
   },
   async createPersonalRecord(data: InsertPersonalRecord) {
     const rows = await db.insert(personalRecords).values(data).returning();
+    return rows[0];
+  },
+  // Keep a single best PR per (user, exercise): insert if none, update only when
+  // the new set beats the stored one (heavier weight, or same weight & more reps).
+  async upsertPersonalRecord(data: InsertPersonalRecord) {
+    const existing = await this.getPersonalRecord(data.userId, data.exerciseId);
+    if (!existing) {
+      return this.createPersonalRecord(data);
+    }
+    const isBetter = data.weight > existing.weight ||
+      (data.weight === existing.weight && data.reps > existing.reps);
+    if (!isBetter) return existing;
+    const rows = await db.update(personalRecords)
+      .set({ weight: data.weight, reps: data.reps, date: data.date })
+      .where(eq(personalRecords.id, existing.id))
+      .returning();
     return rows[0];
   },
   async deletePersonalRecord(id: number) {
