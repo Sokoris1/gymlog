@@ -135,6 +135,16 @@ async function ensureTables() {
       )
     `);
     log("ensureTables: body_weight_logs OK");
+
+    // Reconcile schema drift: add columns the app code expects but that older
+    // deployments of the DB may be missing. All additive + idempotent.
+    await client.query(`ALTER TABLE workout_exercises ADD COLUMN IF NOT EXISTS note TEXT`);
+    await client.query(`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS message TEXT`);
+    await client.query(`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS related_id INTEGER`);
+    await client.query(`ALTER TABLE training_events ADD COLUMN IF NOT EXISTS date TEXT`);
+    await client.query(`ALTER TABLE training_events ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW() NOT NULL`);
+    await client.query(`ALTER TABLE event_invites ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW() NOT NULL`);
+    log("ensureTables: column reconciliation OK");
   } catch (e) {
     console.error("ensureTables error:", e);
   } finally {
