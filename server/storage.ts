@@ -93,6 +93,8 @@ export interface IStorage {
 
   // Exercise progress (sets over time)
   getExerciseProgress(userId: number, exerciseId: number): Promise<Array<{ date: string; maxWeight: number; reps: number }>>;
+  // Heaviest completed set weight from the most recent prior workout with this exercise
+  getLastBestWeight(userId: number, exerciseId: number, excludeWorkoutId?: number): Promise<number | null>;
 
   // Body Weight Logs
   getBodyWeightLogs(userId: number): Promise<BodyWeightLog[]>;
@@ -349,6 +351,34 @@ export const storage: IStorage = {
       ORDER BY w.date ASC
     `;
     return rows as Array<{ date: string; maxWeight: number; reps: number }>;
+  },
+
+  async getLastBestWeight(userId, exerciseId, excludeWorkoutId = 0) {
+    // Find the most recent date on which the user did this exercise (with at least
+    // one completed set), in a workout other than the current one, then return the
+    // heaviest weight lifted on that date.
+    const rows = await sql`
+      SELECT MAX(s.weight) AS weight
+      FROM workouts wo
+      JOIN workout_exercises we ON we.workout_id = wo.id
+      JOIN sets s ON s.workout_exercise_id = we.id
+      WHERE wo.user_id = ${userId}
+        AND we.exercise_id = ${exerciseId}
+        AND wo.id <> ${excludeWorkoutId}
+        AND s.is_completed = true
+        AND wo.date = (
+          SELECT MAX(wo2.date)
+          FROM workouts wo2
+          JOIN workout_exercises we2 ON we2.workout_id = wo2.id
+          JOIN sets s2 ON s2.workout_exercise_id = we2.id
+          WHERE wo2.user_id = ${userId}
+            AND we2.exercise_id = ${exerciseId}
+            AND wo2.id <> ${excludeWorkoutId}
+            AND s2.is_completed = true
+        )
+    `;
+    const w = (rows as any[])[0]?.weight;
+    return w == null ? null : Number(w);
   },
 
   // ─── Body Weight Logs ────────────────────────────────────────────────────

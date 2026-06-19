@@ -377,12 +377,24 @@ export default function ActiveWorkoutPage() {
     updateSet.mutate({ id: set.id, data: { isCompleted: !set.isCompleted } });
   };
 
-  const handleAddSet = (workoutExerciseId: number, currentSets: any[]) => {
+  const handleAddSet = async (workoutExerciseId: number, exerciseId: number, currentSets: any[]) => {
     const lastSet = currentSets[currentSets.length - 1];
+    let weight = lastSet?.weight ?? 0;
+    // First set of this exercise: prefill weight from the heaviest set of the
+    // user's most recent prior workout with this exercise.
+    if (!lastSet) {
+      try {
+        const res = await apiRequest(
+          "GET",
+          `/api/exercises/${exerciseId}/last-weight/${userId}?excludeWorkoutId=${workoutId}`,
+        ).then(r => r.json());
+        if (res?.weight != null) weight = res.weight;
+      } catch { /* fall back to 0 */ }
+    }
     addSet.mutate({
       workoutExerciseId,
       setNumber: currentSets.length + 1,
-      weight: lastSet?.weight ?? 0,
+      weight,
       reps: lastSet?.reps ?? 0,
       rpe: lastSet?.rpe ?? null,
       isCompleted: false,
@@ -485,7 +497,7 @@ export default function ActiveWorkoutPage() {
               lang={lang}
               index={idx}
               total={workoutExercises.length}
-              onAddSet={() => handleAddSet(we.id, we.sets ?? [])}
+              onAddSet={() => handleAddSet(we.id, we.exerciseId, we.sets ?? [])}
               onSetComplete={(set: any) => handleSetComplete(set)}
               onUpdateSet={(setId: number, data: any) => updateSet.mutate({ id: setId, data })}
               onDeleteSet={(setId: number) => deleteSet.mutate(setId)}
