@@ -15,7 +15,7 @@ import { setActiveWorkout } from "@/lib/store";
 const muscleGroups = ["chest", "back", "legs", "shoulders", "arms", "core"];
 
 export default function TemplatesPage() {
-  const { userId } = useAuth();
+  const { userId, user, login } = useAuth();
   const { lang } = useLang();
   const { toast } = useToast();
   const [, navigate] = useLocation();
@@ -108,6 +108,21 @@ export default function TemplatesPage() {
       toast({ title: lang === "ru" ? "Программа удалена" : "Program deleted" });
     },
   });
+
+  const setActiveProgram = useMutation({
+    mutationFn: (programId: number | null) =>
+      apiRequest("PATCH", `/api/users/${userId}`, { activeProgramId: programId }).then(r => r.json()),
+    onSuccess: (data, programId) => {
+      if (data?.id) login(data);
+      toast({
+        title: programId == null
+          ? (lang === "ru" ? "Программа отключена" : "Program deactivated")
+          : (lang === "ru" ? "Программа выбрана" : "Program selected"),
+      });
+    },
+  });
+
+  const activeProgramId = user?.activeProgramId ?? null;
 
   const exName = (ex: any) =>
     lang === "ru" ? (exerciseNameRu[ex.name] ?? ex.name) : ex.name;
@@ -329,10 +344,13 @@ export default function TemplatesPage() {
           {programs?.map((p: any) => {
             const days = JSON.parse(p.days ?? "[]");
             const activeDays = days.filter((d: any) => d.templateId);
+            const isActive = p.id === activeProgramId;
             return (
               <button key={p.id} data-testid={`program-card-${p.id}`}
                 onClick={() => setSelectedProgram(p)}
-                className="w-full text-left bg-card border border-card-border rounded-2xl p-4 hover-elevate">
+                className={`w-full text-left bg-card border rounded-2xl p-4 hover-elevate ${
+                  isActive ? "border-primary" : "border-card-border"
+                }`}>
                 <div className="flex items-center justify-between mb-3">
                   <div>
                     <div className="font-semibold text-sm">{p.name}</div>
@@ -341,6 +359,7 @@ export default function TemplatesPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
+                    {isActive && <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full">{lang === "ru" ? "Активна" : "Active"}</span>}
                     {p.isSystem && <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">{t("templates.system", lang)}</span>}
                     <ChevronRight size={14} className="text-muted-foreground" />
                   </div>
@@ -599,6 +618,29 @@ export default function TemplatesPage() {
               <div className="text-muted-foreground text-xs">
                 {selectedProgram.durationWeeks} {t("templates.weeks", lang)}
               </div>
+
+              {/* Active program toggle */}
+              {selectedProgram.id === activeProgramId ? (
+                <Button
+                  variant="outline"
+                  className="w-full gap-2"
+                  disabled={setActiveProgram.isPending}
+                  onClick={() => setActiveProgram.mutate(null)}
+                >
+                  <span className="text-primary font-semibold">✓ {lang === "ru" ? "Активна" : "Active"}</span>
+                  <span className="text-muted-foreground">·</span>
+                  <span>{lang === "ru" ? "Отключить" : "Deactivate"}</span>
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  disabled={setActiveProgram.isPending}
+                  onClick={() => setActiveProgram.mutate(selectedProgram.id)}
+                >
+                  {lang === "ru" ? "Выбрать как мою программу" : "Set as my program"}
+                </Button>
+              )}
 
               {/* Start today's training */}
               {(() => {

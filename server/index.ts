@@ -165,6 +165,10 @@ async function ensureTables() {
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS push_inactivity_days INTEGER DEFAULT 0`);
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS push_last_reminder_date TEXT`);
     log("ensureTables: push tables OK");
+
+    // Active training program per user
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS active_program_id INTEGER`);
+    log("ensureTables: active_program_id OK");
   } catch (e) {
     console.error("ensureTables error:", e);
   } finally {

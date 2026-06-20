@@ -13,6 +13,7 @@ export const users = pgTable("users", {
   bodyWeight: real("body_weight"),
   goal: text("goal", { enum: ["strength", "hypertrophy", "weight_loss", "general"] }).default("general"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  activeProgramId: integer("active_program_id"), // chosen training program (NULL = none)
   // Push notification preferences
   pushReminderEnabled: boolean("push_reminder_enabled").default(false),
   pushReminderDays: text("push_reminder_days"),       // e.g. "1,2,3,4,5" (0=Sun)

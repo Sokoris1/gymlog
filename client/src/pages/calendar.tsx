@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 
 export default function CalendarPage() {
-  const { userId } = useAuth();
+  const { userId, user } = useAuth();
   const { lang } = useLang();
   const locale = lang === "ru" ? dateFnsRu : undefined;
   const { toast } = useToast();
@@ -43,17 +43,21 @@ export default function CalendarPage() {
     queryFn: () => apiRequest("GET", "/api/templates").then(r => r.json()),
   });
 
+  // Only the user's chosen (active) program drives the calendar.
+  const activeProgramId = user?.activeProgramId ?? null;
+  const activeProgram = (programs ?? []).find((p: any) => p.id === activeProgramId) ?? null;
+
   // weekday (0-6) → list of planned trainings { program, label }
   const plannedByWeekday: Record<number, { program: string; label: string }[]> = {};
-  (programs ?? []).forEach((p: any) => {
-    const days = JSON.parse(p.days ?? "[]");
+  if (activeProgram) {
+    const days = JSON.parse(activeProgram.days ?? "[]");
     days.forEach((d: any) => {
       if (d.templateId == null) return;
       const tpl = templates?.find((tp: any) => tp.id === d.templateId);
       const label = tpl?.name ?? d.label ?? "";
-      (plannedByWeekday[d.weekday] ??= []).push({ program: p.name, label });
+      (plannedByWeekday[d.weekday] ??= []).push({ program: activeProgram.name, label });
     });
-  });
+  }
   const hasPlanned = (d: Date) => (plannedByWeekday[d.getDay()]?.length ?? 0) > 0;
 
   const createEvent = useMutation({
