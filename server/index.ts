@@ -8,6 +8,7 @@ import bcrypt from "bcryptjs";
 import connectPgSimple from "connect-pg-simple";
 import pg from "pg";
 import { registerRoutes } from "./routes";
+import { initPush } from "./push";
 import { serveStatic } from "./static";
 import { createServer } from "node:http";
 import { storage } from "./storage";
@@ -145,6 +146,25 @@ async function ensureTables() {
     await client.query(`ALTER TABLE training_events ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW() NOT NULL`);
     await client.query(`ALTER TABLE event_invites ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW() NOT NULL`);
     log("ensureTables: column reconciliation OK");
+
+    // Push notifications: subscriptions table + user preference columns
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS push_subscriptions (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        endpoint TEXT NOT NULL UNIQUE,
+        p256dh TEXT NOT NULL,
+        auth TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )
+    `);
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS push_reminder_enabled BOOLEAN DEFAULT FALSE`);
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS push_reminder_days TEXT`);
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS push_reminder_time TEXT`);
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS push_tz TEXT`);
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS push_inactivity_days INTEGER DEFAULT 0`);
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS push_last_reminder_date TEXT`);
+    log("ensureTables: push tables OK");
   } catch (e) {
     console.error("ensureTables error:", e);
   } finally {
@@ -154,6 +174,7 @@ async function ensureTables() {
 
 (async () => {
   await ensureTables();
+  initPush();
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {

@@ -3,6 +3,8 @@ import type { Server } from "http";
 import bcrypt from "bcryptjs";
 import passport from "passport";
 import { storage } from "./storage";
+import { sendPushToUser, getPublicKey, isPushConfigured } from "./push";
+import { runScheduledPush } from "./pushScheduler";
 import { insertUserSchema, insertExerciseSchema, insertWorkoutTemplateSchema,
   insertTrainingProgramSchema,
   insertWorkoutSchema, insertWorkoutExerciseSchema, insertSetSchema,
@@ -298,12 +300,18 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       if (existing) return res.status(400).json({ error: "Already sent" });
       const f = await storage.createFriendRequest({ userId: me, friendId, status: "pending" });
       const sender = await storage.getUser(me);
+      const friendMsg = `${sender?.name ?? "Someone"} sent you a friend request`;
       await storage.createNotification({
         userId: friendId,
         type: "friend_request",
-        message: `${sender?.name ?? "Someone"} sent you a friend request`,
+        message: friendMsg,
         isRead: false,
       });
+      sendPushToUser(friendId, {
+        title: "GymLog",
+        body: friendMsg,
+        url: "/#/friends",
+      }).catch(err => console.error("[push] friend_request:", err));
       res.json(f);
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
@@ -431,6 +439,44 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     try {
       await storage.deleteTrainingProgram(Number(req.params.id));
       res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  // ─── Push Notifications ─────────────────────────────────────────────────────
+  app.get("/api/push/public-key", (_req, res) => {
+    res.json({ key: getPublicKey(), enabled: isPushConfigured() });
+  });
+
+  app.post("/api/push/subscribe", requireAuth, async (req, res) => {
+    try {
+      const me = (req.user as any).id;
+      const { subscription, tz } = req.body;
+      const endpoint = subscription?.endpoint;
+      const p256dh = subscription?.keys?.p256dh;
+      const auth = subscription?.keys?.auth;
+      if (!endpoint || !p256dh || !auth) return res.status(400).json({ error: "Invalid subscription" });
+      await storage.createPushSubscription({ userId: me, endpoint, p256dh, auth });
+      if (tz) await storage.updateUser(me, { pushTz: tz });
+      res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.post("/api/push/unsubscribe", requireAuth, async (req, res) => {
+    try {
+      const { endpoint } = req.body;
+      if (endpoint) await storage.deletePushSubscription(endpoint);
+      res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  // Triggered by an external cron (token-protected; Render free tier sleeps).
+  app.post("/api/push/run", async (req, res) => {
+    try {
+      const secret = process.env.PUSH_CRON_SECRET;
+      const token = req.query.token ?? req.headers["x-cron-token"];
+      if (!secret || token !== secret) return res.status(401).json({ error: "unauthorized" });
+      const result = await runScheduledPush();
+      res.json(result);
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
@@ -728,12 +774,18 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       if (!result.success) return res.status(400).json({ error: result.error });
       const inv = await storage.createEventInvite(result.data);
       const event = await storage.getTrainingEvent(inv.eventId);
+      const inviteMsg = `You have been invited to: ${event?.title ?? "an event"}`;
       await storage.createNotification({
         userId: inv.userId,
         type: "event_invite",
-        message: `You have been invited to: ${event?.title ?? "an event"}`,
+        message: inviteMsg,
         isRead: false,
       });
+      sendPushToUser(inv.userId, {
+        title: "GymLog",
+        body: inviteMsg,
+        url: "/#/calendar",
+      }).catch(err => console.error("[push] event_invite:", err));
       res.json(inv);
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });

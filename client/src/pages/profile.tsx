@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Bell, LogOut, Trophy, Dumbbell, Flame, Sun, Moon, Globe, KeyRound, AtSign, Trash2, Eye, EyeOff, ChevronRight, Shield, Target, Weight } from "lucide-react";
+import { Bell, BellRing, LogOut, Trophy, Dumbbell, Flame, Sun, Moon, Globe, KeyRound, AtSign, Trash2, Eye, EyeOff, ChevronRight, Shield, Target, Weight } from "lucide-react";
 import { useAuth, useTheme, useLang } from "@/App";
 import { useLocation } from "wouter";
 import { t } from "@/lib/i18n";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { pushSupported, isSubscribed, enablePush, disablePush } from "@/lib/push";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -57,6 +58,79 @@ export default function ProfilePage() {
 
   // Delete account state
   const [deletePassword, setDeletePassword] = useState("");
+
+  // ── Push notifications
+  const [showPushDialog, setShowPushDialog] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [subscribed, setSubscribed] = useState(false);
+  const [pushDays, setPushDays] = useState<Set<number>>(new Set());
+  const [pushTime, setPushTime] = useState("18:00");
+  const [pushInactivity, setPushInactivity] = useState(0);
+
+  const { data: profileUser } = useQuery({
+    queryKey: ["/api/users", userId, "profile"],
+    queryFn: () => apiRequest("GET", `/api/users/${userId}`).then(r => r.json()),
+    enabled: !!userId,
+  });
+
+  // Seed the push form from the server prefs once loaded / dialog opened.
+  useEffect(() => {
+    if (!profileUser) return;
+    const days = (profileUser.pushReminderDays ?? "").split(",").map((s: string) => s.trim()).filter(Boolean).map(Number);
+    setPushDays(new Set(days));
+    if (profileUser.pushReminderTime) setPushTime(profileUser.pushReminderTime);
+    setPushInactivity(profileUser.pushInactivityDays ?? 0);
+  }, [profileUser]);
+
+  useEffect(() => {
+    isSubscribed().then(setSubscribed).catch(() => setSubscribed(false));
+  }, [showPushDialog]);
+
+  const savePushPrefs = useMutation({
+    mutationFn: (enabled: boolean) => {
+      const daysStr = Array.from(pushDays).sort((a, b) => a - b).join(",");
+      return apiRequest("PATCH", `/api/users/${userId}`, {
+        pushReminderEnabled: enabled,
+        pushReminderDays: daysStr,
+        pushReminderTime: pushTime,
+        pushInactivityDays: Number(pushInactivity) || 0,
+        pushTz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      }).then(r => r.json());
+    },
+    onSuccess: (data) => {
+      if (data?.id) {
+        login(data);
+        queryClient.invalidateQueries({ queryKey: ["/api/users", userId, "profile"] });
+        toast({ title: ru ? "Настройки сохранены" : "Settings saved" });
+      }
+    },
+  });
+
+  const toggleSubscription = async () => {
+    setPushBusy(true);
+    try {
+      if (subscribed) {
+        await disablePush();
+        setSubscribed(false);
+        savePushPrefs.mutate(false);
+      } else {
+        await enablePush();
+        setSubscribed(true);
+        savePushPrefs.mutate(true);
+      }
+    } catch (e: any) {
+      const msg = e?.message === "denied"
+        ? (ru ? "Разрешение на уведомления отклонено" : "Notification permission denied")
+        : e?.message === "unsupported"
+        ? (ru ? "Браузер не поддерживает push" : "Browser doesn't support push")
+        : e?.message === "server_not_configured"
+        ? (ru ? "Push не настроен на сервере (нет VAPID-ключей)" : "Push not configured on server")
+        : (ru ? "Не удалось включить уведомления" : "Failed to enable notifications");
+      toast({ title: msg, variant: "destructive" });
+    } finally {
+      setPushBusy(false);
+    }
+  };
 
   const changePassword = useMutation({
     mutationFn: () => apiRequest("POST", "/api/auth/change-password", { userId, currentPassword, newPassword }).then(r => r.json()),
@@ -310,6 +384,17 @@ export default function ProfilePage() {
             <ChevronRight size={14} className="text-muted-foreground" />
           </button>
 
+          {/* Push notifications */}
+          <button onClick={() => setShowPushDialog(true)}
+            className="w-full flex items-center gap-3 px-4 py-3.5 hover-elevate border-b border-card-border text-left">
+            <BellRing size={18} className="text-muted-foreground" />
+            <span className="font-medium text-sm flex-1">{ru ? "Push-уведомления" : "Push notifications"}</span>
+            <span className="text-xs text-muted-foreground">
+              {subscribed ? (ru ? "Вкл" : "On") : (ru ? "Выкл" : "Off")}
+            </span>
+            <ChevronRight size={14} className="text-muted-foreground" />
+          </button>
+
           {/* Admin panel */}
           {user?.isAdmin && (
             <button onClick={() => navigate("/admin")}
@@ -335,6 +420,119 @@ export default function ProfilePage() {
           </button>
         </div>
       </div>
+
+      {/* ── Push Notifications Dialog ── */}
+      <Dialog open={showPushDialog} onOpenChange={setShowPushDialog}>
+        <DialogContent className="bg-card border-card-border">
+          <DialogHeader>
+            <DialogTitle>{ru ? "Push-уведомления" : "Push Notifications"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-1">
+            {!pushSupported() ? (
+              <p className="text-sm text-muted-foreground">
+                {ru
+                  ? "Этот браузер не поддерживает push-уведомления."
+                  : "This browser doesn't support push notifications."}
+              </p>
+            ) : (
+              <>
+                {/* Enable / disable */}
+                <div className="flex items-center justify-between bg-background border border-border rounded-xl px-4 py-3">
+                  <div className="flex-1 min-w-0 pr-3">
+                    <div className="font-medium text-sm">{ru ? "Уведомления на устройство" : "Device notifications"}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {subscribed ? (ru ? "Включены на этом устройстве" : "Enabled on this device") : (ru ? "Выключены" : "Disabled")}
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant={subscribed ? "outline" : "default"}
+                    disabled={pushBusy}
+                    onClick={toggleSubscription}
+                  >
+                    {pushBusy ? "…" : subscribed ? (ru ? "Выключить" : "Disable") : (ru ? "Включить" : "Enable")}
+                  </Button>
+                </div>
+
+                {subscribed && (
+                  <>
+                    {/* Schedule reminder */}
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                        {ru ? "Напоминание по расписанию" : "Scheduled reminder"}
+                      </p>
+                      <div className="flex gap-1">
+                        {[1, 2, 3, 4, 5, 6, 0].map((wd) => {
+                          const labels = ru
+                            ? ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"]
+                            : ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+                          const active = pushDays.has(wd);
+                          return (
+                            <button
+                              key={wd}
+                              onClick={() => setPushDays(prev => {
+                                const next = new Set(prev);
+                                next.has(wd) ? next.delete(wd) : next.add(wd);
+                                return next;
+                              })}
+                              className={`flex-1 aspect-square rounded-lg text-[11px] font-semibold transition-colors ${
+                                active ? "bg-primary text-primary-foreground" : "bg-background border border-border text-muted-foreground"
+                              }`}
+                            >
+                              {labels[wd]}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <label className="text-sm text-muted-foreground">{ru ? "Время" : "Time"}</label>
+                        <Input
+                          type="time"
+                          value={pushTime}
+                          onChange={(e) => setPushTime(e.target.value)}
+                          className="bg-background border-border w-32"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Inactivity reminder */}
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                        {ru ? "Напоминание при простое" : "Inactivity reminder"}
+                      </p>
+                      <div className="flex items-center gap-3">
+                        <Input
+                          type="number" min={0} max={60}
+                          value={pushInactivity}
+                          onChange={(e) => setPushInactivity(Number(e.target.value))}
+                          className="bg-background border-border w-20"
+                        />
+                        <span className="text-sm text-muted-foreground">
+                          {ru ? "дней без тренировки (0 — выкл)" : "days without training (0 = off)"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <Button
+                      className="w-full"
+                      disabled={savePushPrefs.isPending}
+                      onClick={() => savePushPrefs.mutate(true)}
+                    >
+                      {savePushPrefs.isPending ? (ru ? "Сохранение…" : "Saving…") : (ru ? "Сохранить" : "Save")}
+                    </Button>
+                  </>
+                )}
+
+                <p className="text-xs text-muted-foreground">
+                  {ru
+                    ? "На iPhone уведомления работают только если добавить приложение на домашний экран (iOS 16.4+)."
+                    : "On iPhone, notifications work only if you add the app to your Home Screen (iOS 16.4+)."}
+                </p>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Goal Dialog ── */}
       <Dialog open={showGoalDialog} onOpenChange={setShowGoalDialog}>

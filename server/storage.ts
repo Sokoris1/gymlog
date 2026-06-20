@@ -4,7 +4,7 @@ import { eq, and, desc } from "drizzle-orm";
 import {
   users, exercises, workoutTemplates, trainingPrograms, workouts,
   workoutExercises, sets, personalRecords, trainingEvents, eventInvites,
-  notifications, friends, bodyWeightLogs,
+  notifications, friends, bodyWeightLogs, pushSubscriptions,
   type User, type InsertUser, type Exercise, type InsertExercise,
   type WorkoutTemplate, type InsertWorkoutTemplate,
   type TrainingProgram, type InsertTrainingProgram,
@@ -17,6 +17,7 @@ import {
   type Notification, type InsertNotification,
   type Friend, type InsertFriend,
   type BodyWeightLog, type InsertBodyWeightLog,
+  type PushSubscription, type InsertPushSubscription,
 } from "@shared/schema";
 
 if (!process.env.DATABASE_URL) {
@@ -38,6 +39,12 @@ export interface IStorage {
   createUser(data: InsertUser): Promise<User>;
   updateUser(id: number, data: Partial<InsertUser>): Promise<User | undefined>;
   deleteUser(id: number): Promise<void>;
+
+  // Push subscriptions
+  getPushSubscriptions(userId: number): Promise<PushSubscription[]>;
+  createPushSubscription(data: InsertPushSubscription): Promise<PushSubscription>;
+  deletePushSubscription(endpoint: string): Promise<void>;
+  getUsersWithReminders(): Promise<User[]>;
 
   // Friends
   getFriends(userId: number): Promise<Friend[]>;
@@ -165,7 +172,29 @@ export const storage: IStorage = {
     await db.delete(notifications).where(eq(notifications.userId, id));
     await db.delete(eventInvites).where(eq(eventInvites.userId, id));
     await db.delete(trainingEvents).where(eq(trainingEvents.creatorId, id));
+    await db.delete(pushSubscriptions).where(eq(pushSubscriptions.userId, id));
     await db.delete(users).where(eq(users.id, id));
+  },
+
+  // ─── Push Subscriptions ─────────────────────────────────────────────────────
+  async getPushSubscriptions(userId) {
+    return db.select().from(pushSubscriptions).where(eq(pushSubscriptions.userId, userId));
+  },
+  async createPushSubscription(data) {
+    const rows = await db.insert(pushSubscriptions)
+      .values(data)
+      .onConflictDoUpdate({
+        target: pushSubscriptions.endpoint,
+        set: { userId: data.userId, p256dh: data.p256dh, auth: data.auth },
+      })
+      .returning();
+    return rows[0];
+  },
+  async deletePushSubscription(endpoint) {
+    await db.delete(pushSubscriptions).where(eq(pushSubscriptions.endpoint, endpoint));
+  },
+  async getUsersWithReminders() {
+    return db.select().from(users).where(eq(users.pushReminderEnabled, true));
   },
 
   // ─── Friends ──────────────────────────────────────────────────────────────

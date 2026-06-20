@@ -13,10 +13,30 @@ export const users = pgTable("users", {
   bodyWeight: real("body_weight"),
   goal: text("goal", { enum: ["strength", "hypertrophy", "weight_loss", "general"] }).default("general"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  // Push notification preferences
+  pushReminderEnabled: boolean("push_reminder_enabled").default(false),
+  pushReminderDays: text("push_reminder_days"),       // e.g. "1,2,3,4,5" (0=Sun)
+  pushReminderTime: text("push_reminder_time"),       // "HH:MM" local to pushTz
+  pushTz: text("push_tz"),                            // IANA timezone
+  pushInactivityDays: integer("push_inactivity_days").default(0), // 0 = off
+  pushLastReminderDate: text("push_last_reminder_date"), // "YYYY-MM-DD" dedup
 });
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
+
+// ─── Push Subscriptions ───────────────────────────────────────────────────────
+export const pushSubscriptions = pgTable("push_subscriptions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  endpoint: text("endpoint").notNull().unique(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export const insertPushSubscriptionSchema = createInsertSchema(pushSubscriptions).omit({ id: true, createdAt: true });
+export type InsertPushSubscription = z.infer<typeof insertPushSubscriptionSchema>;
+export type PushSubscription = typeof pushSubscriptions.$inferSelect;
 
 // ─── Body Weight Logs ─────────────────────────────────────────────────────────
 export const bodyWeightLogs = pgTable("body_weight_logs", {
