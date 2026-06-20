@@ -57,11 +57,14 @@ export interface IStorage {
   getWorkoutTemplate(id: number): Promise<WorkoutTemplate | undefined>;
   createWorkoutTemplate(data: InsertWorkoutTemplate): Promise<WorkoutTemplate>;
   updateWorkoutTemplate(id: number, data: Partial<InsertWorkoutTemplate>): Promise<WorkoutTemplate | undefined>;
+  deleteWorkoutTemplate(id: number): Promise<void>;
 
   // Training Programs
   getTrainingPrograms(): Promise<TrainingProgram[]>;
   getTrainingProgram(id: number): Promise<TrainingProgram | undefined>;
   createTrainingProgram(data: InsertTrainingProgram): Promise<TrainingProgram>;
+  updateTrainingProgram(id: number, data: Partial<InsertTrainingProgram>): Promise<TrainingProgram | undefined>;
+  deleteTrainingProgram(id: number): Promise<void>;
 
   // Workouts
   getWorkouts(userId: number): Promise<Workout[]>;
@@ -226,6 +229,9 @@ export const storage: IStorage = {
     const rows = await db.update(workoutTemplates).set(data).where(eq(workoutTemplates.id, id)).returning();
     return rows[0];
   },
+  async deleteWorkoutTemplate(id) {
+    await db.delete(workoutTemplates).where(eq(workoutTemplates.id, id));
+  },
 
   // ─── Training Programs ───────────────────────────────────────────────────
   async getTrainingPrograms() {
@@ -238,6 +244,13 @@ export const storage: IStorage = {
   async createTrainingProgram(data) {
     const rows = await db.insert(trainingPrograms).values(data).returning();
     return rows[0];
+  },
+  async updateTrainingProgram(id, data) {
+    const rows = await db.update(trainingPrograms).set(data).where(eq(trainingPrograms.id, id)).returning();
+    return rows[0];
+  },
+  async deleteTrainingProgram(id) {
+    await db.delete(trainingPrograms).where(eq(trainingPrograms.id, id));
   },
 
   // ─── Workouts ─────────────────────────────────────────────────────────────

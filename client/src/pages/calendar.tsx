@@ -33,6 +33,29 @@ export default function CalendarPage() {
     enabled: !!userId,
   });
 
+  const { data: programs } = useQuery({
+    queryKey: ["/api/programs"],
+    queryFn: () => apiRequest("GET", "/api/programs").then(r => r.json()),
+  });
+
+  const { data: templates } = useQuery({
+    queryKey: ["/api/templates"],
+    queryFn: () => apiRequest("GET", "/api/templates").then(r => r.json()),
+  });
+
+  // weekday (0-6) → list of planned trainings { program, label }
+  const plannedByWeekday: Record<number, { program: string; label: string }[]> = {};
+  (programs ?? []).forEach((p: any) => {
+    const days = JSON.parse(p.days ?? "[]");
+    days.forEach((d: any) => {
+      if (d.templateId == null) return;
+      const tpl = templates?.find((tp: any) => tp.id === d.templateId);
+      const label = tpl?.name ?? d.label ?? "";
+      (plannedByWeekday[d.weekday] ??= []).push({ program: p.name, label });
+    });
+  });
+  const hasPlanned = (d: Date) => (plannedByWeekday[d.getDay()]?.length ?? 0) > 0;
+
   const createEvent = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/events", data).then(r => r.json()),
     onSuccess: () => {
@@ -96,6 +119,7 @@ export default function CalendarPage() {
           const dayStr = format(day, "yyyy-MM-dd");
           const hasWorkout = workoutDates.has(dayStr);
           const hasEvent = eventDates.has(dayStr);
+          const planned = hasPlanned(day) && !hasWorkout;
           const isSelected = selectedDate ? isSameDay(day, selectedDate) : false;
           const today = isToday(day);
           return (
@@ -109,6 +133,7 @@ export default function CalendarPage() {
               <div className="flex gap-0.5 absolute bottom-1">
                 {hasWorkout && <div className={`w-1 h-1 rounded-full ${isSelected ? "bg-primary-foreground" : "bg-primary"}`} />}
                 {hasEvent && <div className={`w-1 h-1 rounded-full ${isSelected ? "bg-primary-foreground" : "bg-chart-2"}`} />}
+                {planned && <div className={`w-1 h-1 rounded-full border ${isSelected ? "border-primary-foreground" : "border-primary"}`} />}
               </div>
             </button>
           );
@@ -121,7 +146,24 @@ export default function CalendarPage() {
           <h2 className="font-semibold text-sm mb-3 text-muted-foreground capitalize">
             {format(selectedDate, "EEEE, d MMMM", { locale })}
           </h2>
-          {selectedWorkouts.length === 0 && selectedEvents.length === 0 && (
+          {(() => {
+            const planned = plannedByWeekday[selectedDate.getDay()] ?? [];
+            const dayHasWorkout = workoutDates.has(selectedDateStr ?? "");
+            if (planned.length === 0 || dayHasWorkout) return null;
+            return planned.map((pl, i) => (
+              <div key={`planned-${i}`} className="bg-card border border-dashed border-primary/40 rounded-xl p-3 flex items-center gap-3 mb-2">
+                <div className="w-2 h-2 rounded-full border border-primary flex-shrink-0" />
+                <div>
+                  <div className="font-medium text-sm">{pl.label}</div>
+                  <div className="text-muted-foreground text-xs">
+                    {lang === "ru" ? "По программе" : "Planned"} · {pl.program}
+                  </div>
+                </div>
+              </div>
+            ));
+          })()}
+          {selectedWorkouts.length === 0 && selectedEvents.length === 0 &&
+            (plannedByWeekday[selectedDate.getDay()]?.length ?? 0) === 0 && (
             <div className="text-center py-6 text-muted-foreground text-sm">{t("calendar.noActivity", lang)}</div>
           )}
           {selectedWorkouts.map((w: any) => (

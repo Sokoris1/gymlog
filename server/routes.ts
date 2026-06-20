@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import passport from "passport";
 import { storage } from "./storage";
 import { insertUserSchema, insertExerciseSchema, insertWorkoutTemplateSchema,
+  insertTrainingProgramSchema,
   insertWorkoutSchema, insertWorkoutExerciseSchema, insertSetSchema,
   insertTrainingEventSchema, insertEventInviteSchema, insertNotificationSchema,
   insertFriendSchema } from "@shared/schema";
@@ -391,6 +392,13 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
+  app.delete("/api/templates/:id", requireAuth, async (req, res) => {
+    try {
+      await storage.deleteWorkoutTemplate(Number(req.params.id));
+      res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
   // ─── Training Programs ────────────────────────────────────────────────────
   app.get("/api/programs", async (req, res) => {
     try { res.json(await storage.getTrainingPrograms()); }
@@ -402,6 +410,27 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       const p = await storage.getTrainingProgram(Number(req.params.id));
       if (!p) return res.status(404).json({ error: "Not found" });
       res.json(p);
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.post("/api/programs", requireAuth, async (req, res) => {
+    try {
+      const result = insertTrainingProgramSchema.safeParse(req.body);
+      if (!result.success) return res.status(400).json({ error: result.error });
+      res.json(await storage.createTrainingProgram(result.data));
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.patch("/api/programs/:id", requireAuth, async (req, res) => {
+    try {
+      res.json(await storage.updateTrainingProgram(Number(req.params.id), req.body));
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.delete("/api/programs/:id", requireAuth, async (req, res) => {
+    try {
+      await storage.deleteTrainingProgram(Number(req.params.id));
+      res.json({ success: true });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
