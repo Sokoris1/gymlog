@@ -659,7 +659,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       const { exerciseId, weight, reps, date } = req.body;
       if (!exerciseId || weight == null || reps == null || !date)
         return res.status(400).json({ error: "Missing fields" });
-      const rows = await storage.createPersonalRecord({ userId: me, exerciseId, weight: Number(weight), reps: Number(reps), date });
+      const rows = await storage.upsertPersonalRecord({ userId: me, exerciseId, weight: Number(weight), reps: Number(reps), date });
       res.json(rows);
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });

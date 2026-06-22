@@ -170,11 +170,14 @@ export default function ProgressPage() {
     addWeightLog.mutate({ weight: w, date: newWeightDate });
   }
 
-  const savedIds = new Set((records ?? []).map((r: any) => r.exerciseId));
+  const savedByExId = new Map<number, any>((records ?? []).map((r: any) => [r.exerciseId, r]));
+  const beatsPR = (newPR: { weight: number; reps: number }, old?: { weight: number; reps: number }) =>
+    !old || newPR.weight > old.weight || (newPR.weight === old.weight && newPR.reps > old.reps);
   const filteredExercises = (exercises ?? []).filter((e: any) =>
     exName(e, lang).toLowerCase().includes(exSearch.toLowerCase())
   );
   const selectedExercise = (exercises ?? []).find((e: any) => e.id === manualExerciseId);
+  const currentManualPR = manualExerciseId ? savedByExId.get(manualExerciseId) : null;
 
   // Body weight chart domain padding
   const bwData: any[] = bodyWeightLogs ?? [];
@@ -503,6 +506,15 @@ export default function ProgressPage() {
                       </span>
                       <ChevronDown size={14} className="text-muted-foreground" />
                     </button>
+                    {currentManualPR && (
+                      <div className="flex items-center gap-1.5 mt-1.5 text-xs text-yellow-400/90">
+                        <Trophy size={11} />
+                        <span>
+                          {ru ? "Текущий рекорд: " : "Current PR: "}
+                          <span className="font-semibold">{currentManualPR.weight} кг × {currentManualPR.reps}</span>
+                        </span>
+                      </div>
+                    )}
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
@@ -541,20 +553,27 @@ export default function ProgressPage() {
                   ) : (
                     <div className="space-y-2 max-h-72 overflow-y-auto">
                       {bestSets.map((b: any) => {
-                        const alreadySaved = savedIds.has(b.exerciseId);
+                        const savedPR = savedByExId.get(b.exerciseId);
+                        const canUpdate = !!savedPR && beatsPR(b, savedPR);
+                        const matched = !!savedPR && !canUpdate;
                         return (
                           <div key={b.exerciseId}
-                            className={`bg-background border border-border rounded-xl p-3 flex items-center gap-3 ${alreadySaved ? "opacity-50" : ""}`}>
+                            className={`bg-background border border-border rounded-xl p-3 flex items-center gap-3 ${matched ? "opacity-50" : ""}`}>
                             <div className="flex-1 min-w-0">
                               <div className="font-medium text-sm truncate">{exName(b.exercise, lang)}</div>
                               <div className="text-primary text-xs font-semibold mt-0.5">{b.weight} кг × {b.reps}</div>
+                              {savedPR && (
+                                <div className="text-muted-foreground text-[10px] mt-0.5">
+                                  {ru ? "Текущий: " : "Current: "}{savedPR.weight} кг × {savedPR.reps}
+                                </div>
+                              )}
                             </div>
                             <div className="flex items-center gap-2 flex-shrink-0">
                               <span className="text-xs text-muted-foreground">{format(parseISO(b.date + "T00:00:00"), "d MMM", { locale })}</span>
                               <Button size="sm" variant="outline" className="rounded-lg h-7 text-xs"
-                                disabled={alreadySaved || createRecord.isPending}
+                                disabled={matched || createRecord.isPending}
                                 onClick={() => handleHistorySave(b)}>
-                                {alreadySaved ? "✓" : (ru ? "Сохранить" : "Save")}
+                                {matched ? "✓" : canUpdate ? (ru ? "Обновить" : "Update") : (ru ? "Сохранить" : "Save")}
                               </Button>
                             </div>
                           </div>
