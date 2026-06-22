@@ -34,6 +34,12 @@ There is **no test suite and no linter** configured. Verify changes with `npx ts
 
 **Auth:** Passport local strategy + `express-session` backed by Postgres (`connect-pg-simple`). Protect routes with the `requireAuth` middleware; ownership checks compare `(req.user as any).id`. `PATCH /api/users/:id` validates with `insertUserSchema.partial()`, so **any column added to the `users` table is automatically accepted** by that endpoint (this is how goal, push prefs, and activeProgramId are saved — no new route needed).
 
+**Cross-user reads.** When an endpoint exposes one user's data to another (e.g. friend profile views), allow the owner OR an accepted friend — use `storage.areFriends(me, target)`. The friendship row is stored once per pair (whichever side sent the request), so the helper checks both directions. When relaxing such a check, also fetch the *target* user's data, not `me`'s — a stale `getFoo(me)` call inside the relaxed branch is an easy thing to miss.
+
+**`apiRequest` does not throw on non-2xx.** It returns the raw `Response`. Most `useQuery` calls chain `.then(r => r.json())`, so a 4xx/5xx body silently becomes "data" — `(data ?? []).length` reads `undefined`, the UI renders an empty state, and the failure looks like "no records". When tightening backend authorization, audit the frontend so the failure is visible.
+
+**Personal records: upsert, not insert.** `POST /api/prs` uses `storage.upsertPersonalRecord` — insert if absent, update only when the new lift beats the stored one (`weight >`, or `weight ===` and `reps >`). `storage.createPersonalRecord` still exists as a primitive used by `seed.ts`; don't wire it into a public endpoint or you'll get duplicate rows per `(user, exercise)`.
+
 **i18n:** `client/src/lib/i18n.ts` holds a nested `{ ru, en }` dictionary accessed via `t("key.path", lang)`. Many components also inline `lang === "ru" ? "…" : "…"` for one-off strings — both patterns are acceptable; match the surrounding file. Exercise names have a separate RU map in `client/src/lib/exerciseNames.ts`.
 
 ## Database: schema is the source of truth, with a self-heal safety net
