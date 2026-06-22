@@ -640,8 +640,11 @@ export async function registerRoutes(httpServer: Server, app: Express) {
   app.get("/api/prs/:userId", requireAuth, async (req, res) => {
     try {
       const me = (req.user as any).id;
-      if (me !== Number(req.params.userId)) return res.status(403).json({ error: "forbidden" });
-      const prs = await storage.getPersonalRecords(me);
+      const target = Number(req.params.userId);
+      if (me !== target && !(await storage.areFriends(me, target))) {
+        return res.status(403).json({ error: "forbidden" });
+      }
+      const prs = await storage.getPersonalRecords(target);
       const enriched = await Promise.all(prs.map(async pr => ({
         ...pr,
         exercise: await storage.getExercise(pr.exerciseId),
@@ -702,12 +705,15 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  // FIX #9: added owner check — previously any authenticated user could view another user's workouts
+  // Owner can view own workouts; friends can view accepted friend's completed workouts.
   app.get("/api/users/:userId/workouts", requireAuth, async (req, res) => {
     try {
       const me = (req.user as any).id;
-      if (me !== Number(req.params.userId)) return res.status(403).json({ error: "forbidden" });
-      const workouts = await storage.getWorkouts(me);
+      const target = Number(req.params.userId);
+      if (me !== target && !(await storage.areFriends(me, target))) {
+        return res.status(403).json({ error: "forbidden" });
+      }
+      const workouts = await storage.getWorkouts(target);
       const completed = workouts.filter((w: any) => !!w.endTime);
       res.json(completed);
     } catch (e) { res.status(500).json({ error: String(e) }); }

@@ -1,6 +1,6 @@
 import { drizzle } from "drizzle-orm/neon-http";
 import { neon } from "@neondatabase/serverless";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, or, desc } from "drizzle-orm";
 import {
   users, exercises, workoutTemplates, trainingPrograms, workouts,
   workoutExercises, sets, personalRecords, trainingEvents, eventInvites,
@@ -51,6 +51,7 @@ export interface IStorage {
   getIncomingRequests(userId: number): Promise<Friend[]>;
   getFriendship(userId: number, friendId: number): Promise<Friend | undefined>;
   getFriendshipById(id: number): Promise<Friend | undefined>;
+  areFriends(userIdA: number, userIdB: number): Promise<boolean>;
   createFriendRequest(data: InsertFriend): Promise<Friend>;
   updateFriendStatus(id: number, status: Friend["status"]): Promise<Friend | undefined>;
 
@@ -213,6 +214,17 @@ export const storage: IStorage = {
   async getFriendshipById(id) {
     const rows = await db.select().from(friends).where(eq(friends.id, id));
     return rows[0];
+  },
+  async areFriends(userIdA, userIdB) {
+    if (userIdA === userIdB) return false;
+    const rows = await db.select().from(friends).where(and(
+      eq(friends.status, "accepted"),
+      or(
+        and(eq(friends.userId, userIdA), eq(friends.friendId, userIdB)),
+        and(eq(friends.userId, userIdB), eq(friends.friendId, userIdA)),
+      ),
+    ));
+    return rows.length > 0;
   },
   async createFriendRequest(data) {
     const rows = await db.insert(friends).values(data).returning();
