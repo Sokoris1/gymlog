@@ -5,6 +5,7 @@ import { useLang } from "@/App";
 import { t } from "@/lib/i18n";
 import { apiRequest } from "@/lib/queryClient";
 import { Skeleton } from "@/components/ui/skeleton";
+import { UserAvatar } from "@/components/UserAvatar";
 import { format, parseISO } from "date-fns";
 import { ru as dateFnsRu } from "date-fns/locale";
 import { exerciseNameRu } from "@/lib/exerciseNames";
@@ -87,12 +88,14 @@ export default function FriendProfilePage() {
       {/* Profile card */}
       <div className="bg-card border border-card-border rounded-2xl p-4 mb-5">
         <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center text-2xl font-bold text-primary flex-shrink-0">
-            {friend?.name?.charAt(0)?.toUpperCase() ?? "?"}
-          </div>
+          <UserAvatar
+            name={friend?.name}
+            avatar={friend?.avatar}
+            containerClassName="w-14 h-14 rounded-2xl flex-shrink-0"
+            fallbackClassName="bg-primary/10 text-primary text-2xl"
+          />
           <div className="flex-1 min-w-0">
             <div className="font-bold text-base truncate">{friend?.name}</div>
-            <div className="text-muted-foreground text-sm">@{friend?.username}</div>
             <div className="mt-1">
               <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-lg">
                 {goalLabel(friend?.goal, ru)}

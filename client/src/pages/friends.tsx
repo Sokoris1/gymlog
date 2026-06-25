@@ -7,6 +7,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { UserAvatar } from "@/components/UserAvatar";
 import { useToast } from "@/hooks/use-toast";
 
 export default function FriendsPage() {
@@ -66,7 +67,7 @@ export default function FriendsPage() {
     ...(incoming?.map((f: any) => f.userId) ?? []),
     userId,
   ]);
-  const availableUsers = allUsers?.filter((u: any) => !existingFriendIds.has(u.id)) ?? [];
+  const availableUsers = allUsers?.filter((u: any) => !existingFriendIds.has(u.id) && !u.isAdmin) ?? [];
 
   return (
     <div className="min-h-screen px-4 pt-6">
@@ -103,12 +104,14 @@ export default function FriendsPage() {
                   data-testid={`incoming-request-${req.id}`}
                   className="bg-card border border-primary/30 rounded-2xl p-3 flex items-center gap-3"
                 >
-                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center font-bold text-sm text-primary flex-shrink-0">
-                    {req.senderData?.name?.charAt(0)?.toUpperCase() ?? "?"}
-                  </div>
+                  <UserAvatar
+                    name={req.senderData?.name}
+                    avatar={req.senderData?.avatar}
+                    containerClassName="w-10 h-10 rounded-xl flex-shrink-0"
+                    fallbackClassName="bg-primary/10 text-primary text-sm"
+                  />
                   <div className="flex-1 min-w-0">
                     <div className="font-medium text-sm">{req.senderData?.name ?? "Пользователь"}</div>
-                    <div className="text-muted-foreground text-xs">@{req.senderData?.username}</div>
                   </div>
                   <div className="flex gap-2 flex-shrink-0">
                     <button
@@ -142,12 +145,14 @@ export default function FriendsPage() {
           <div className="space-y-2">
             {pendingOutgoing.map((f: any) => (
               <div key={f.id} data-testid={`pending-outgoing-${f.id}`} className="bg-card border border-card-border rounded-2xl p-3 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center font-bold text-sm">
-                  {f.friendData?.name?.charAt(0)?.toUpperCase() ?? "?"}
-                </div>
+                <UserAvatar
+                  name={f.friendData?.name}
+                  avatar={f.friendData?.avatar}
+                  containerClassName="w-10 h-10 rounded-xl flex-shrink-0"
+                  fallbackClassName="bg-muted text-sm"
+                />
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-sm">{f.friendData?.name ?? "Пользователь"}</div>
-                  <div className="text-muted-foreground text-xs">@{f.friendData?.username}</div>
                 </div>
                 <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded-lg flex-shrink-0">Ожидает</span>
               </div>
@@ -177,12 +182,14 @@ export default function FriendsPage() {
               <button key={f.id} data-testid={`friend-card-${f.id}`}
                 onClick={() => navigate(`/friends/${f.friendId}`)}
                 className="w-full bg-card border border-card-border rounded-2xl p-3 flex items-center gap-3 hover-elevate text-left">
-                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center font-bold text-sm text-primary flex-shrink-0">
-                  {f.friendData?.name?.charAt(0)?.toUpperCase() ?? "?"}
-                </div>
+                <UserAvatar
+                  name={f.friendData?.name}
+                  avatar={f.friendData?.avatar}
+                  containerClassName="w-10 h-10 rounded-xl flex-shrink-0"
+                  fallbackClassName="bg-primary/10 text-primary text-sm"
+                />
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-sm">{f.friendData?.name ?? "Пользователь"}</div>
-                  <div className="text-muted-foreground text-xs">@{f.friendData?.username}</div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <span className="text-xs text-primary bg-primary/10 px-2 py-1 rounded-lg">{goalLabel(f.friendData?.goal)}</span>
@@ -206,12 +213,14 @@ export default function FriendsPage() {
             ) : (
               availableUsers.map((u: any) => (
                 <div key={u.id} data-testid={`available-user-${u.id}`} className="flex items-center gap-3 bg-background border border-border rounded-xl p-3">
-                  <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center font-bold text-sm flex-shrink-0">
-                    {u.name?.charAt(0)?.toUpperCase() ?? "?"}
-                  </div>
+                  <UserAvatar
+                    name={u.name}
+                    avatar={u.avatar}
+                    containerClassName="w-10 h-10 rounded-xl flex-shrink-0"
+                    fallbackClassName="bg-muted text-sm"
+                  />
                   <div className="flex-1 min-w-0">
                     <div className="font-medium text-sm">{u.name}</div>
-                    <div className="text-muted-foreground text-xs">@{u.username}</div>
                   </div>
                   <Button
                     data-testid={`button-send-request-${u.id}`}

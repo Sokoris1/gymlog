@@ -27,13 +27,14 @@ declare module "http" {
 
 app.use(
   express.json({
+    limit: "1mb",
     verify: (req, _res, buf) => {
       req.rawBody = buf;
     },
   }),
 );
 
-app.use(express.urlencoded({ extended: false }));
+app.use(express.urlencoded({ extended: false, limit: "1mb" }));
 
 // ─── Session ──────────────────────────────────────────────────────────────────
 const PgSession = connectPgSimple(session);
@@ -169,6 +170,9 @@ async function ensureTables() {
     // Active training program per user
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS active_program_id INTEGER`);
     log("ensureTables: active_program_id OK");
+
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar TEXT`);
+    log("ensureTables: avatar OK");
   } catch (e) {
     console.error("ensureTables error:", e);
   } finally {

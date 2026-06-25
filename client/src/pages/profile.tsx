@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, type ChangeEvent } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Bell, BellRing, LogOut, Trophy, Dumbbell, Flame, Sun, Moon, Globe, KeyRound, AtSign, Trash2, Eye, EyeOff, ChevronRight, Shield, Target, Weight } from "lucide-react";
+import { Bell, BellRing, LogOut, Trophy, Dumbbell, Flame, Sun, Moon, Globe, KeyRound, AtSign, Trash2, Eye, EyeOff, ChevronRight, Shield, Target, Weight, Camera, X } from "lucide-react";
 import { useAuth, useTheme, useLang } from "@/App";
 import { useLocation } from "wouter";
 import { t } from "@/lib/i18n";
@@ -10,7 +10,33 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { UserAvatar } from "@/components/UserAvatar";
 import { useToast } from "@/hooks/use-toast";
+
+async function fileToAvatarDataUrl(file: File, max = 256): Promise<string> {
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result as string);
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(file);
+  });
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const im = new Image();
+    im.onload = () => resolve(im);
+    im.onerror = () => reject(new Error("image_load_failed"));
+    im.src = dataUrl;
+  });
+  const scale = Math.min(1, max / Math.max(img.width, img.height));
+  const w = Math.max(1, Math.round(img.width * scale));
+  const h = Math.max(1, Math.round(img.height * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("canvas_unsupported");
+  ctx.drawImage(img, 0, 0, w, h);
+  return canvas.toDataURL("image/jpeg", 0.85);
+}
 import { format, parseISO } from "date-fns";
 import { ru as dateFnsRu } from "date-fns/locale";
 
@@ -58,6 +84,10 @@ export default function ProfilePage() {
 
   // Delete account state
   const [deletePassword, setDeletePassword] = useState("");
+
+  // Avatar
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [avatarBusy, setAvatarBusy] = useState(false);
 
   // ── Push notifications
   const [showPushDialog, setShowPushDialog] = useState(false);
@@ -189,6 +219,40 @@ export default function ProfilePage() {
     },
   });
 
+  const saveAvatar = useMutation({
+    mutationFn: (avatar: string | null) =>
+      apiRequest("PATCH", `/api/users/${userId}`, { avatar }).then(r => r.json()),
+    onSuccess: (data) => {
+      if (data?.id) {
+        login(data);
+        queryClient.invalidateQueries({ queryKey: ["/api/users", userId, "profile"] });
+        toast({ title: ru ? "Аватар обновлён" : "Avatar updated" });
+      } else {
+        toast({ title: ru ? "Ошибка" : "Error", variant: "destructive" });
+      }
+    },
+    onError: () => toast({ title: ru ? "Ошибка" : "Error", variant: "destructive" }),
+  });
+
+  const onAvatarFile = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast({ title: ru ? "Выберите изображение" : "Pick an image", variant: "destructive" });
+      return;
+    }
+    setAvatarBusy(true);
+    try {
+      const dataUrl = await fileToAvatarDataUrl(file, 256);
+      await saveAvatar.mutateAsync(dataUrl);
+    } catch {
+      toast({ title: ru ? "Не удалось обработать изображение" : "Image processing failed", variant: "destructive" });
+    } finally {
+      setAvatarBusy(false);
+    }
+  };
+
   const saveBodyWeight = useMutation({
     mutationFn: () => {
       const val = parseFloat(bodyWeightInput.replace(",", "."));
@@ -283,8 +347,42 @@ export default function ProfilePage() {
 
       {/* Avatar + Info */}
       <div className="bg-card border border-card-border rounded-2xl p-4 flex items-center gap-4 mb-4">
-        <div className="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-2xl font-bold text-primary flex-shrink-0">
-          {user?.name?.charAt(0)?.toUpperCase() ?? "?"}
+        <div className="relative flex-shrink-0">
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={avatarBusy}
+            className="block disabled:opacity-60"
+            aria-label={ru ? "Сменить аватар" : "Change avatar"}
+          >
+            <UserAvatar
+              name={user?.name}
+              avatar={user?.avatar}
+              containerClassName="w-16 h-16 rounded-2xl border border-primary/20"
+              fallbackClassName="bg-primary/10 text-2xl text-primary"
+            />
+          </button>
+          <span className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center border-2 border-card pointer-events-none">
+            <Camera size={11} />
+          </span>
+          {user?.avatar && (
+            <button
+              type="button"
+              onClick={() => saveAvatar.mutate(null)}
+              disabled={avatarBusy}
+              aria-label={ru ? "Удалить аватар" : "Remove avatar"}
+              className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center border-2 border-card disabled:opacity-60"
+            >
+              <X size={10} />
+            </button>
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={onAvatarFile}
+          />
         </div>
         <div className="flex-1 min-w-0">
           <div className="font-bold text-base">{user?.name ?? "Athlete"}</div>
