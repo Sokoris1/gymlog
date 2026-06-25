@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useLocation, useParams } from "wouter";
 import { ArrowLeft, Trophy, Dumbbell, Calendar, Star, ChevronRight } from "lucide-react";
 import { useLang } from "@/App";
+import { t } from "@/lib/i18n";
 import { apiRequest } from "@/lib/queryClient";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format, parseISO } from "date-fns";
@@ -190,12 +191,12 @@ export default function FriendProfilePage() {
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-sm truncate">{exName(rec.exercise, lang)}</div>
                   <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-primary font-semibold text-sm">{rec.weight} кг × {rec.reps}</span>
+                    <span className="text-primary font-semibold text-sm">{rec.weight} {ru ? "кг" : "kg"} × {rec.reps}</span>
                     {rec.reps === 1 && (
                       <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded-md font-bold">1RM</span>
                     )}
                     <span className={`text-xs ${muscleGroupColors[rec.exercise?.muscleGroup] ?? "text-muted-foreground"}`}>
-                      {rec.exercise?.muscleGroup}
+                      {t(`exercises.muscles.${rec.exercise?.muscleGroup}` as any, lang)}
                     </span>
                   </div>
                 </div>

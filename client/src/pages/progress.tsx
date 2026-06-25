@@ -44,6 +44,7 @@ export default function ProgressPage() {
   const { lang } = useLang();
   const locale = lang === "ru" ? dateFnsRu : undefined;
   const ru = lang === "ru";
+  const kgLabel = ru ? "кг" : "kg";
   const { toast } = useToast();
 
   const [tab, setTab] = useState<"bodyweight" | "chart" | "records">("bodyweight");
@@ -156,7 +157,7 @@ export default function ProgressPage() {
     if (!manualExerciseId) return toast({ title: ru ? "Выберите упражнение" : "Select exercise", variant: "destructive" });
     const w = parseFloat(manualWeight);
     const r = parseInt(manualReps);
-    if (!w || !r) return toast({ title: ru ? "Введите вес и повторения" : "Enter weight and reps", variant: "destructive" });
+    if (!w || w <= 0 || !r || r <= 0) return toast({ title: ru ? "Введите вес и повторения" : "Enter weight and reps", variant: "destructive" });
     createRecord.mutate({ userId, exerciseId: manualExerciseId, weight: w, reps: r, date: manualDate });
   }
 
@@ -265,7 +266,7 @@ export default function ProgressPage() {
                       borderRadius: "8px",
                       fontSize: 12,
                     }}
-                    formatter={(v: any) => [`${v} кг`, ru ? "Вес" : "Weight"]}
+                    formatter={(v: any) => [`${v} ${kgLabel}`, ru ? "Вес" : "Weight"]}
                     labelFormatter={l => format(parseISO(l + "T00:00:00"), "d MMM yyyy", { locale })}
                   />
                   <Line
@@ -290,7 +291,7 @@ export default function ProgressPage() {
                     <Scale size={18} className="text-primary" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-sm text-primary">{log.weight} кг</div>
+                    <div className="font-semibold text-sm text-primary">{log.weight} {kgLabel}</div>
                     <div className="text-xs text-muted-foreground mt-0.5">
                       {format(parseISO(log.date + "T00:00:00"), "d MMMM yyyy", { locale })}
                     </div>
@@ -381,7 +382,7 @@ export default function ProgressPage() {
                   <div className="flex-1 min-w-0">
                     <div className="font-medium text-sm truncate">{exName(rec.exercise, lang)}</div>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-primary font-semibold text-sm">{rec.weight} кг × {rec.reps}</span>
+                      <span className="text-primary font-semibold text-sm">{rec.weight} {kgLabel} × {rec.reps}</span>
                       {rec.reps === 1 && <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded-md font-bold">1RM</span>}
                       <span className={`text-xs ${muscleGroupColors[rec.exercise?.muscleGroup] ?? "text-muted-foreground"}`}>
                         {t(`exercises.muscles.${rec.exercise?.muscleGroup}` as any, lang)}
@@ -418,7 +419,7 @@ export default function ProgressPage() {
                         <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
                         <Tooltip
                           contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--card-border))", borderRadius: "8px", fontSize: 12 }}
-                          formatter={(v: any) => [`${v} кг`, ru ? "Вес" : "Weight"]}
+                          formatter={(v: any) => [`${v} ${kgLabel}`, ru ? "Вес" : "Weight"]}
                           labelFormatter={l => format(parseISO(l + "T00:00:00"), "d MMM yyyy", { locale })}
                         />
                         <Line type="monotone" dataKey="maxWeight" stroke="hsl(var(--primary))" strokeWidth={2.5}
@@ -460,7 +461,7 @@ export default function ProgressPage() {
                   <div className="flex-1 min-w-0">
                     <div className="font-medium text-sm truncate">{exName(rec.exercise, lang)}</div>
                     <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                      <span className="text-primary font-semibold text-sm">{rec.weight} кг × {rec.reps}</span>
+                      <span className="text-primary font-semibold text-sm">{rec.weight} {kgLabel} × {rec.reps}</span>
                       {rec.reps === 1 && <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded-md font-bold">1RM</span>}
                     </div>
                   </div>
@@ -511,7 +512,7 @@ export default function ProgressPage() {
                         <Trophy size={11} />
                         <span>
                           {ru ? "Текущий рекорд: " : "Current PR: "}
-                          <span className="font-semibold">{currentManualPR.weight} кг × {currentManualPR.reps}</span>
+                          <span className="font-semibold">{currentManualPR.weight} {kgLabel} × {currentManualPR.reps}</span>
                         </span>
                       </div>
                     )}
@@ -555,25 +556,24 @@ export default function ProgressPage() {
                       {bestSets.map((b: any) => {
                         const savedPR = savedByExId.get(b.exerciseId);
                         const canUpdate = !!savedPR && beatsPR(b, savedPR);
-                        const matched = !!savedPR && !canUpdate;
                         return (
                           <div key={b.exerciseId}
-                            className={`bg-background border border-border rounded-xl p-3 flex items-center gap-3 ${matched ? "opacity-50" : ""}`}>
+                            className="bg-background border border-border rounded-xl p-3 flex items-center gap-3">
                             <div className="flex-1 min-w-0">
                               <div className="font-medium text-sm truncate">{exName(b.exercise, lang)}</div>
-                              <div className="text-primary text-xs font-semibold mt-0.5">{b.weight} кг × {b.reps}</div>
+                              <div className="text-primary text-xs font-semibold mt-0.5">{b.weight} {kgLabel} × {b.reps}</div>
                               {savedPR && (
                                 <div className="text-muted-foreground text-[10px] mt-0.5">
-                                  {ru ? "Текущий: " : "Current: "}{savedPR.weight} кг × {savedPR.reps}
+                                  {ru ? "Текущий: " : "Current: "}{savedPR.weight} {kgLabel} × {savedPR.reps}
                                 </div>
                               )}
                             </div>
                             <div className="flex items-center gap-2 flex-shrink-0">
                               <span className="text-xs text-muted-foreground">{format(parseISO(b.date + "T00:00:00"), "d MMM", { locale })}</span>
                               <Button size="sm" variant="outline" className="rounded-lg h-7 text-xs"
-                                disabled={matched || createRecord.isPending}
+                                disabled={createRecord.isPending}
                                 onClick={() => handleHistorySave(b)}>
-                                {matched ? "✓" : canUpdate ? (ru ? "Обновить" : "Update") : (ru ? "Сохранить" : "Save")}
+                                {savedPR ? (canUpdate ? (ru ? "Обновить" : "Update") : (ru ? "Перезаписать" : "Overwrite")) : (ru ? "Сохранить" : "Save")}
                               </Button>
                             </div>
                           </div>
@@ -583,35 +583,36 @@ export default function ProgressPage() {
                   )}
                 </div>
               )}
-            </DialogContent>
-          </Dialog>
 
-          {/* Exercise picker sheet */}
-          {showExPicker && (
-            <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[200] p-4">
-              <div className="bg-card border border-card-border rounded-2xl w-full max-w-md max-h-[70vh] flex flex-col">
-                <div className="p-4 border-b border-border">
-                  <h3 className="font-semibold text-sm mb-3">{ru ? "Выберите упражнение" : "Select exercise"}</h3>
-                  <div className="relative">
-                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                    <Input className="pl-8 bg-background border-border" placeholder={ru ? "Поиск..." : "Search..."} value={exSearch} onChange={e => setExSearch(e.target.value)} />
+              {/* Exercise picker — nested INSIDE Dialog so clicks aren't treated as outside */}
+              {showExPicker && (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[200] p-4"
+                  onClick={e => { if (e.target === e.currentTarget) setShowExPicker(false); }}>
+                  <div className="bg-card border border-card-border rounded-2xl w-full max-w-md max-h-[70vh] flex flex-col">
+                    <div className="p-4 border-b border-border">
+                      <h3 className="font-semibold text-sm mb-3">{ru ? "Выберите упражнение" : "Select exercise"}</h3>
+                      <div className="relative">
+                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                        <Input className="pl-8 bg-background border-border" placeholder={ru ? "Поиск..." : "Search..."} value={exSearch} onChange={e => setExSearch(e.target.value)} />
+                      </div>
+                    </div>
+                    <div className="overflow-y-auto flex-1 p-2">
+                      {filteredExercises.map((e: any) => (
+                        <button key={e.id} onClick={() => { setManualExerciseId(e.id); setShowExPicker(false); }}
+                          className={`w-full text-left px-3 py-2.5 rounded-xl text-sm hover:bg-muted transition-colors flex items-center justify-between ${manualExerciseId === e.id ? "bg-primary/10 text-primary" : ""}`}>
+                          <span>{exName(e, lang)}</span>
+                          {manualExerciseId === e.id && <span className="text-primary text-xs">✓</span>}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="p-3 border-t border-border">
+                      <Button variant="outline" className="w-full" onClick={() => setShowExPicker(false)}>{ru ? "Отмена" : "Cancel"}</Button>
+                    </div>
                   </div>
                 </div>
-                <div className="overflow-y-auto flex-1 p-2">
-                  {filteredExercises.map((e: any) => (
-                    <button key={e.id} onClick={() => { setManualExerciseId(e.id); setShowExPicker(false); }}
-                      className={`w-full text-left px-3 py-2.5 rounded-xl text-sm hover:bg-muted transition-colors flex items-center justify-between ${manualExerciseId === e.id ? "bg-primary/10 text-primary" : ""}`}>
-                      <span>{exName(e, lang)}</span>
-                      {manualExerciseId === e.id && <span className="text-primary text-xs">✓</span>}
-                    </button>
-                  ))}
-                </div>
-                <div className="p-3 border-t border-border">
-                  <Button variant="outline" className="w-full" onClick={() => setShowExPicker(false)}>{ru ? "Отмена" : "Cancel"}</Button>
-                </div>
-              </div>
-            </div>
-          )}
+              )}
+            </DialogContent>
+          </Dialog>
 
           {/* Delete confirm */}
           {deleteConfirmId !== null && (
