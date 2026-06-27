@@ -6,6 +6,7 @@ import { t } from "@/lib/i18n";
 import { apiRequest } from "@/lib/queryClient";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar } from "@/components/UserAvatar";
+import { AvatarViewerDialog } from "@/components/AvatarViewerDialog";
 import { format, parseISO } from "date-fns";
 import { ru as dateFnsRu } from "date-fns/locale";
 import { exerciseNameRu } from "@/lib/exerciseNames";
@@ -36,6 +37,7 @@ export default function FriendProfilePage() {
   const locale = lang === "ru" ? dateFnsRu : undefined;
   const [, navigate] = useLocation();
   const [tab, setTab] = useState<"workouts" | "records">("workouts");
+  const [showAvatarViewer, setShowAvatarViewer] = useState(false);
 
   const friendId = Number(id);
 
@@ -88,12 +90,19 @@ export default function FriendProfilePage() {
       {/* Profile card */}
       <div className="bg-card border border-card-border rounded-2xl p-4 mb-5">
         <div className="flex items-center gap-4">
-          <UserAvatar
-            name={friend?.name}
-            avatar={friend?.avatar}
-            containerClassName="w-14 h-14 rounded-2xl flex-shrink-0"
-            fallbackClassName="bg-primary/10 text-primary text-2xl"
-          />
+          <button
+            type="button"
+            onClick={() => setShowAvatarViewer(true)}
+            className="flex-shrink-0"
+            aria-label={ru ? "Просмотреть аватар" : "View avatar"}
+          >
+            <UserAvatar
+              name={friend?.name}
+              avatar={friend?.avatar}
+              containerClassName="w-14 h-14 rounded-2xl"
+              fallbackClassName="bg-primary/10 text-primary text-2xl"
+            />
+          </button>
           <div className="flex-1 min-w-0">
             <div className="font-bold text-base truncate">{friend?.name}</div>
             <div className="mt-1">
@@ -170,6 +179,14 @@ export default function FriendProfilePage() {
           </div>
         )
       )}
+
+      <AvatarViewerDialog
+        open={showAvatarViewer}
+        onClose={() => setShowAvatarViewer(false)}
+        avatar={friend?.avatar}
+        name={friend?.name}
+        lang={lang}
+      />
 
       {/* Records tab */}
       {tab === "records" && (

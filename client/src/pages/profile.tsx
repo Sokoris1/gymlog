@@ -11,32 +11,9 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar } from "@/components/UserAvatar";
+import { AvatarCropDialog } from "@/components/AvatarCropDialog";
+import { AvatarViewerDialog } from "@/components/AvatarViewerDialog";
 import { useToast } from "@/hooks/use-toast";
-
-async function fileToAvatarDataUrl(file: File, max = 256): Promise<string> {
-  const dataUrl = await new Promise<string>((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(r.result as string);
-    r.onerror = () => reject(r.error);
-    r.readAsDataURL(file);
-  });
-  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-    const im = new Image();
-    im.onload = () => resolve(im);
-    im.onerror = () => reject(new Error("image_load_failed"));
-    im.src = dataUrl;
-  });
-  const scale = Math.min(1, max / Math.max(img.width, img.height));
-  const w = Math.max(1, Math.round(img.width * scale));
-  const h = Math.max(1, Math.round(img.height * scale));
-  const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("canvas_unsupported");
-  ctx.drawImage(img, 0, 0, w, h);
-  return canvas.toDataURL("image/jpeg", 0.85);
-}
 import { format, parseISO } from "date-fns";
 import { ru as dateFnsRu } from "date-fns/locale";
 
@@ -88,6 +65,8 @@ export default function ProfilePage() {
   // Avatar
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [avatarBusy, setAvatarBusy] = useState(false);
+  const [cropFile, setCropFile] = useState<File | null>(null);
+  const [showAvatarViewer, setShowAvatarViewer] = useState(false);
 
   // ── Push notifications
   const [showPushDialog, setShowPushDialog] = useState(false);
@@ -234,7 +213,7 @@ export default function ProfilePage() {
     onError: () => toast({ title: ru ? "Ошибка" : "Error", variant: "destructive" }),
   });
 
-  const onAvatarFile = async (e: ChangeEvent<HTMLInputElement>) => {
+  const onAvatarFile = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
@@ -242,10 +221,14 @@ export default function ProfilePage() {
       toast({ title: ru ? "Выберите изображение" : "Pick an image", variant: "destructive" });
       return;
     }
+    setCropFile(file);
+  };
+
+  const onCroppedAvatar = async (dataUrl: string) => {
     setAvatarBusy(true);
     try {
-      const dataUrl = await fileToAvatarDataUrl(file, 256);
       await saveAvatar.mutateAsync(dataUrl);
+      setCropFile(null);
     } catch {
       toast({ title: ru ? "Не удалось обработать изображение" : "Image processing failed", variant: "destructive" });
     } finally {
@@ -350,10 +333,9 @@ export default function ProfilePage() {
         <div className="relative flex-shrink-0">
           <button
             type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={avatarBusy}
-            className="block disabled:opacity-60"
-            aria-label={ru ? "Сменить аватар" : "Change avatar"}
+            onClick={() => setShowAvatarViewer(true)}
+            className="block"
+            aria-label={ru ? "Просмотреть аватар" : "View avatar"}
           >
             <UserAvatar
               name={user?.name}
@@ -362,9 +344,15 @@ export default function ProfilePage() {
               fallbackClassName="bg-primary/10 text-2xl text-primary"
             />
           </button>
-          <span className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center border-2 border-card pointer-events-none">
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={avatarBusy}
+            aria-label={ru ? "Сменить аватар" : "Change avatar"}
+            className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center border-2 border-card disabled:opacity-60"
+          >
             <Camera size={11} />
-          </span>
+          </button>
           {user?.avatar && (
             <button
               type="button"
@@ -394,6 +382,21 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>
+
+      <AvatarCropDialog
+        file={cropFile}
+        onCancel={() => setCropFile(null)}
+        onCrop={onCroppedAvatar}
+        lang={lang}
+        busy={avatarBusy}
+      />
+      <AvatarViewerDialog
+        open={showAvatarViewer}
+        onClose={() => setShowAvatarViewer(false)}
+        avatar={user?.avatar}
+        name={user?.name}
+        lang={lang}
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3 mb-5">
