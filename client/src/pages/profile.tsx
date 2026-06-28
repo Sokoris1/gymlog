@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, type ChangeEvent } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Bell, BellRing, LogOut, Trophy, Dumbbell, Flame, Sun, Moon, Globe, KeyRound, AtSign, Trash2, Eye, EyeOff, ChevronRight, Shield, Target, Weight, Camera, X } from "lucide-react";
+import { Bell, BellRing, LogOut, Trophy, Dumbbell, Flame, Sun, Moon, Globe, KeyRound, AtSign, Trash2, Eye, EyeOff, ChevronRight, Shield, Target, Weight, Camera, X, Users } from "lucide-react";
 import { useAuth, useTheme, useLang } from "@/App";
 import { useLocation } from "wouter";
 import { t } from "@/lib/i18n";
@@ -412,6 +412,19 @@ export default function ProfilePage() {
             <div className="text-muted-foreground text-xs leading-tight">{stat.label}</div>
           </div>
         ))}
+      </div>
+
+      {/* ── Friends ── */}
+      <div className="mb-4">
+        <div className="bg-card border border-card-border rounded-2xl overflow-hidden">
+          <button
+            onClick={() => navigate("/friends")}
+            className="w-full flex items-center gap-3 px-4 py-3.5 hover-elevate text-left">
+            <Users size={18} className="text-muted-foreground flex-shrink-0" />
+            <span className="font-medium text-sm flex-1">{t("nav.friends", lang)}</span>
+            <ChevronRight size={14} className="text-muted-foreground flex-shrink-0" />
+          </button>
+        </div>
       </div>
 
       {/* ── My Parameters ── */}

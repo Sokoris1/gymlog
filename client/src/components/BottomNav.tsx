@@ -1,5 +1,5 @@
 import { useLocation, Link, useRoute } from "wouter";
-import { Home, Dumbbell, Calendar, Users, User, Timer } from "lucide-react";
+import { Home, Dumbbell, Calendar, User, Timer } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/App";
 import { useLang } from "@/App";
@@ -49,7 +49,6 @@ export default function BottomNav() {
     { href: "/",         icon: Home,     label: t("nav.home", lang) },
     { href: "/workout",  icon: Dumbbell, label: t("nav.workout", lang) },
     { href: "/calendar", icon: Calendar, label: t("nav.calendar", lang) },
-    { href: "/friends",  icon: Users,    label: t("nav.friends", lang) },
     { href: "/profile",  icon: User,     label: t("nav.profile", lang) },
   ];
 
