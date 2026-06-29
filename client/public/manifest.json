@@ -4,8 +4,8 @@
   "description": "Your personal gym training diary",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#111318",
-  "theme_color": "#f97316",
+  "background_color": "#121212",
+  "theme_color": "#c52020",
   "orientation": "portrait",
   "icons": [
     {
