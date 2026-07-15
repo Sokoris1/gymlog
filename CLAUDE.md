@@ -14,9 +14,9 @@ GymLog is a mobile-first PWA training diary. React 18 + TypeScript + Vite (clien
 | `npm run db:push` | Apply `shared/schema.ts` to the DB (`drizzle-kit push --force`) |
 | `npm run check` | `tsc` typecheck |
 
-There is **no test suite and no linter** configured. Verify changes with `npx tsc --noEmit` and by running the app.
+There is **no test suite and no linter** configured. Verify changes with `npx tsc --noEmit` (or `npm run check`) and by running the app.
 
-`npx tsc --noEmit` currently reports ~4 **pre-existing** errors (missing `bcryptjs` types ×3; a `User | undefined` arg in `server/routes.ts`). These predate current work — don't treat them as regressions, but don't add new ones.
+`npm run check` is currently **clean (0 errors)**. Keep it that way — any error it reports is from current work.
 
 ## Environment
 
