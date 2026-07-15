@@ -601,7 +601,9 @@ export default function ActiveWorkoutPage() {
 
       {/* Add Exercise Dialog */}
       <Dialog open={showAddExercise} onOpenChange={setShowAddExercise}>
-        <DialogContent className="bg-card border-card-border max-h-[85vh] overflow-hidden flex flex-col">
+        <DialogContent
+          className="bg-card border-card-border max-h-[85vh] overflow-hidden flex flex-col"
+          onOpenAutoFocus={(e) => e.preventDefault()}>
           <DialogHeader><DialogTitle>{t("active.dialogTitle", lang)}</DialogTitle></DialogHeader>
           <div className="relative">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />

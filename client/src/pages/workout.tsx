@@ -173,7 +173,7 @@ export default function WorkoutPage() {
 
       {/* New workout dialog */}
       <Dialog open={showNewDialog} onOpenChange={setShowNewDialog}>
-        <DialogContent className="bg-card border-card-border">
+        <DialogContent className="bg-card border-card-border top-[20%] translate-y-0">
           <DialogHeader><DialogTitle>{t("workout.dialogTitle", lang)}</DialogTitle></DialogHeader>
           <div className="space-y-3 mt-2">
             <Input
