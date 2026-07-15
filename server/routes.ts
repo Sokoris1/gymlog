@@ -372,6 +372,16 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
+  // Map of exerciseId -> most recent date the user performed it. Used to sort
+  // the "add exercise" picker so recently-done exercises surface first.
+  app.get("/api/users/:userId/exercise-usage", requireAuth, async (req, res) => {
+    try {
+      const me = (req.user as any).id;
+      if (me !== Number(req.params.userId)) return res.status(403).json({ error: "forbidden" });
+      res.json(await storage.getExerciseUsage(Number(req.params.userId)));
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
   // ─── Workout Templates ────────────────────────────────────────────────────
   app.get("/api/templates", async (req, res) => {
     try { res.json(await storage.getWorkoutTemplates()); }

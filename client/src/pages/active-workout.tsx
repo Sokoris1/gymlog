@@ -289,6 +289,13 @@ export default function ActiveWorkoutPage() {
     queryFn: () => apiRequest("GET", `/api/exercises`).then(r => r.json()),
   });
 
+  // Map of exerciseId -> last date performed, to sort the picker by recency.
+  const { data: exerciseUsage } = useQuery<Record<number, string>>({
+    queryKey: ["/api/users", userId, "exercise-usage"],
+    queryFn: () => apiRequest("GET", `/api/users/${userId}/exercise-usage`).then(r => r.json()),
+    enabled: !!userId,
+  });
+
   const renameWorkout = useMutation({
     mutationFn: (title: string) => apiRequest("PATCH", `/api/workout/${workoutId}`, { title }).then(r => r.json()),
     onSuccess: () => {
@@ -423,6 +430,19 @@ export default function ActiveWorkoutPage() {
     const matchMuscle = !muscleFilter || ex.muscleGroup === muscleFilter;
     return matchSearch && matchMuscle;
   }) ?? [];
+
+  // In the "All" tab, surface recently-performed exercises first (most recent
+  // date on top); never-performed ones keep their original order at the bottom.
+  const sortedExercises = muscleFilter
+    ? filteredExercises
+    : [...filteredExercises].sort((a: any, b: any) => {
+        const da = exerciseUsage?.[a.id];
+        const db = exerciseUsage?.[b.id];
+        if (da && db) return da < db ? 1 : da > db ? -1 : 0;
+        if (da) return -1;
+        if (db) return 1;
+        return 0;
+      });
 
   const rawExercises: any[] = workoutData?.exercises ?? [];
   const workoutExercises = exerciseOrder.length > 0
@@ -606,7 +626,7 @@ export default function ActiveWorkoutPage() {
             ))}
           </div>
           <div className="overflow-y-auto flex-1 space-y-1.5 pr-1">
-            {filteredExercises.map((ex: any) => (
+            {sortedExercises.map((ex: any) => (
               <button key={ex.id} data-testid={`exercise-item-${ex.id}`}
                 onClick={() => addExercise.mutate({ workoutId, exerciseId: ex.id, order: workoutExercises.length })}
                 className="w-full bg-background border border-border rounded-xl p-3 flex items-center gap-2 hover-elevate text-left">

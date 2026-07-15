@@ -59,6 +59,7 @@ export interface IStorage {
   getExercises(muscleGroup?: string, equipment?: string): Promise<Exercise[]>;
   getExercise(id: number): Promise<Exercise | undefined>;
   createExercise(data: InsertExercise): Promise<Exercise>;
+  getExerciseUsage(userId: number): Promise<Record<number, string>>;
 
   // Workout Templates
   getWorkoutTemplates(): Promise<WorkoutTemplate[]>;
@@ -433,6 +434,22 @@ export const storage: IStorage = {
     `;
     const w = (rows as any[])[0]?.weight;
     return w == null ? null : Number(w);
+  },
+
+  async getExerciseUsage(userId) {
+    // Most recent date the user actually performed each exercise (i.e. logged at
+    // least one completed set). Used to sort the exercise picker by recency.
+    const rows = await sql`
+      SELECT we.exercise_id AS "exerciseId", MAX(w.date) AS "lastDate"
+      FROM workouts w
+      JOIN workout_exercises we ON we.workout_id = w.id
+      JOIN sets s ON s.workout_exercise_id = we.id
+      WHERE w.user_id = ${userId} AND s.is_completed = true
+      GROUP BY we.exercise_id
+    `;
+    const map: Record<number, string> = {};
+    for (const r of rows as any[]) map[Number(r.exerciseId)] = String(r.lastDate);
+    return map;
   },
 
   // ─── Body Weight Logs ────────────────────────────────────────────────────
