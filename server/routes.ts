@@ -104,6 +104,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       if (user.passwordHash) return res.status(400).json({ error: "already_has_password" });
       const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
       const updated = await storage.updateUser(user.id, { passwordHash });
+      if (!updated) return res.status(404).json({ error: "User not found" });
       req.logIn(updated, (err) => {
         if (err) return res.status(500).json({ error: String(err) });
         res.json({ user: safeUser(updated) });
