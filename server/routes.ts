@@ -360,15 +360,16 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  // Suggested weight for a new set: heaviest set from the user's most recent prior
-  // workout with this exercise. excludeWorkoutId skips the in-progress workout.
+  // Suggested prefill for a new set: heaviest set from the user's most recent
+  // prior workout with this exercise — its weight and the reps done at that
+  // weight. excludeWorkoutId skips the in-progress workout.
   app.get("/api/exercises/:id/last-weight/:userId", requireAuth, async (req, res) => {
     try {
       const me = (req.user as any).id;
       if (me !== Number(req.params.userId)) return res.status(403).json({ error: "forbidden" });
       const exclude = req.query.excludeWorkoutId ? Number(req.query.excludeWorkoutId) : 0;
-      const weight = await storage.getLastBestWeight(Number(req.params.userId), Number(req.params.id), exclude);
-      res.json({ weight });
+      const best = await storage.getLastBestSet(Number(req.params.userId), Number(req.params.id), exclude);
+      res.json({ weight: best?.weight ?? null, reps: best?.reps ?? null });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 

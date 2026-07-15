@@ -106,7 +106,7 @@ export interface IStorage {
   // Exercise progress (sets over time)
   getExerciseProgress(userId: number, exerciseId: number): Promise<Array<{ date: string; maxWeight: number; reps: number }>>;
   // Heaviest completed set weight from the most recent prior workout with this exercise
-  getLastBestWeight(userId: number, exerciseId: number, excludeWorkoutId?: number): Promise<number | null>;
+  getLastBestSet(userId: number, exerciseId: number, excludeWorkoutId?: number): Promise<{ weight: number; reps: number } | null>;
 
   // Body Weight Logs
   getBodyWeightLogs(userId: number): Promise<BodyWeightLog[]>;
@@ -408,12 +408,13 @@ export const storage: IStorage = {
     return rows as Array<{ date: string; maxWeight: number; reps: number }>;
   },
 
-  async getLastBestWeight(userId, exerciseId, excludeWorkoutId = 0) {
+  async getLastBestSet(userId, exerciseId, excludeWorkoutId = 0) {
     // Find the most recent date on which the user did this exercise (with at least
     // one completed set), in a workout other than the current one, then return the
-    // heaviest weight lifted on that date.
+    // heaviest set from that date — its weight AND the reps performed at that weight.
+    // Used to prefill a new set: weight = best last time, reps = what was done then.
     const rows = await sql`
-      SELECT MAX(s.weight) AS weight
+      SELECT s.weight AS weight, s.reps AS reps
       FROM workouts wo
       JOIN workout_exercises we ON we.workout_id = wo.id
       JOIN sets s ON s.workout_exercise_id = we.id
@@ -431,9 +432,12 @@ export const storage: IStorage = {
             AND wo2.id <> ${excludeWorkoutId}
             AND s2.is_completed = true
         )
+      ORDER BY s.weight DESC, s.reps DESC
+      LIMIT 1
     `;
-    const w = (rows as any[])[0]?.weight;
-    return w == null ? null : Number(w);
+    const r = (rows as any[])[0];
+    if (!r || r.weight == null) return null;
+    return { weight: Number(r.weight), reps: Number(r.reps) };
   },
 
   async getExerciseUsage(userId) {

@@ -387,8 +387,9 @@ export default function ActiveWorkoutPage() {
   const handleAddSet = async (workoutExerciseId: number, exerciseId: number, currentSets: any[]) => {
     const lastSet = currentSets[currentSets.length - 1];
     let weight = lastSet?.weight ?? 0;
-    // First set of this exercise: prefill weight from the heaviest set of the
-    // user's most recent prior workout with this exercise.
+    let reps = lastSet?.reps ?? 0;
+    // First set of this exercise: prefill weight AND reps from the heaviest set
+    // of the user's most recent prior workout with this exercise.
     if (!lastSet) {
       try {
         const res = await apiRequest(
@@ -396,13 +397,14 @@ export default function ActiveWorkoutPage() {
           `/api/exercises/${exerciseId}/last-weight/${userId}?excludeWorkoutId=${workoutId}`,
         ).then(r => r.json());
         if (res?.weight != null) weight = res.weight;
+        if (res?.reps != null) reps = res.reps;
       } catch { /* fall back to 0 */ }
     }
     addSet.mutate({
       workoutExerciseId,
       setNumber: currentSets.length + 1,
       weight,
-      reps: lastSet?.reps ?? 0,
+      reps,
       rpe: lastSet?.rpe ?? null,
       isCompleted: false,
     });
