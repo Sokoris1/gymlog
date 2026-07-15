@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Plus, Dumbbell, ChevronRight, Clock, Calendar, LayoutTemplate, Settings2 } from "lucide-react";
+import { Plus, Dumbbell, ChevronRight, Clock, Calendar, LayoutTemplate, Settings2, Repeat } from "lucide-react";
 import { useAuth, useLang } from "@/App";
 import { t } from "@/lib/i18n";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -75,6 +75,19 @@ export default function WorkoutPage() {
     setShowTemplates(false);
   };
 
+  const repeatWorkout = useMutation({
+    mutationFn: (sourceId: number) =>
+      apiRequest("POST", `/api/workout/${sourceId}/repeat`, {
+        date: new Date().toISOString().split("T")[0],
+        startTime: new Date().toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit" }),
+      }).then(r => r.json()),
+    onSuccess: (workout) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workouts", userId] });
+      setActiveWorkout(workout.id, userId);
+      navigate(`/workout/active/${workout.id}`);
+    },
+  });
+
   return (
     <div className="min-h-screen px-4 pt-6">
       <div className="flex items-center justify-between mb-6">
@@ -142,6 +155,15 @@ export default function WorkoutPage() {
                     )}
                   </div>
                 </div>
+                <button
+                  data-testid={`button-repeat-workout-${w.id}`}
+                  onClick={e => { e.stopPropagation(); repeatWorkout.mutate(w.id); }}
+                  disabled={repeatWorkout.isPending}
+                  className="w-9 h-9 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary hover:bg-primary/20 transition-colors flex-shrink-0 disabled:opacity-50"
+                  title={lang === "ru" ? "Повторить тренировку" : "Repeat workout"}
+                  aria-label={lang === "ru" ? "Повторить тренировку" : "Repeat workout"}>
+                  <Repeat size={15} />
+                </button>
                 <ChevronRight size={14} className="text-muted-foreground flex-shrink-0" />
               </div>
             ))}

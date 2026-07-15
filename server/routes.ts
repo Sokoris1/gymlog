@@ -538,6 +538,57 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
+  // POST /api/workout/:id/repeat — start a fresh workout from a past one,
+  // copying exercises (with their notes) and sets (weight/reps/rpe) as a
+  // starting point but marked not-completed. Returns the new workout row.
+  app.post("/api/workout/:id/repeat", requireAuth, async (req, res) => {
+    try {
+      const source = await storage.getWorkout(Number(req.params.id));
+      if (!source) return res.status(404).json({ error: "Not found" });
+      const me = (req.user as any).id;
+      if (source.userId !== me) return res.status(403).json({ error: "forbidden" });
+
+      // date/startTime come from the client so they reflect the user's timezone;
+      // fall back to server time if omitted.
+      const now = new Date();
+      const date = typeof req.body?.date === "string" ? req.body.date : now.toISOString().split("T")[0];
+      const startTime = typeof req.body?.startTime === "string"
+        ? req.body.startTime
+        : now.toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit" });
+
+      const newWorkout = await storage.createWorkout({
+        userId: me,
+        title: source.title,
+        date,
+        startTime,
+      });
+
+      const sourceExercises = (await storage.getWorkoutExercises(source.id))
+        .sort((a, b) => a.order - b.order);
+      for (const we of sourceExercises) {
+        const newWe = await storage.createWorkoutExercise({
+          workoutId: newWorkout.id,
+          exerciseId: we.exerciseId,
+          order: we.order,
+          note: we.note,
+        });
+        const srcSets = (await storage.getSets(we.id)).sort((a, b) => a.setNumber - b.setNumber);
+        for (const s of srcSets) {
+          await storage.createSet({
+            workoutExerciseId: newWe.id,
+            setNumber: s.setNumber,
+            weight: s.weight,
+            reps: s.reps,
+            rpe: s.rpe,
+            isCompleted: false,
+          });
+        }
+      }
+
+      res.json(newWorkout);
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
   // ─── Workout Exercises ────────────────────────────────────────────────────
   app.get("/api/workout/:id/exercises", requireAuth, async (req, res) => {
     try {

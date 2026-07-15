@@ -1,6 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation, useParams } from "wouter";
-import { ArrowLeft, Dumbbell, Calendar, Clock, Trash2, ChevronDown, ChevronUp, Pencil } from "lucide-react";
+import { ArrowLeft, Dumbbell, Calendar, Clock, Trash2, ChevronDown, ChevronUp, Pencil, Repeat } from "lucide-react";
 import { useState } from "react";
 import { useAuth, useLang } from "@/App";
 import { t } from "@/lib/i18n";
@@ -12,6 +12,7 @@ import { format, parseISO } from "date-fns";
 import { ru as dateFnsRu } from "date-fns/locale";
 import { exerciseNameRu } from "@/lib/exerciseNames";
 import { useToast } from "@/hooks/use-toast";
+import { setActiveWorkout } from "@/lib/store";
 
 export default function WorkoutDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -38,6 +39,19 @@ export default function WorkoutDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/workouts", userId] });
       queryClient.invalidateQueries({ queryKey: ["/api/users", userId, "stats"] });
       navigate("/workout");
+    },
+  });
+
+  const repeatWorkout = useMutation({
+    mutationFn: () =>
+      apiRequest("POST", `/api/workout/${id}/repeat`, {
+        date: new Date().toISOString().split("T")[0],
+        startTime: new Date().toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit" }),
+      }).then(r => r.json()),
+    onSuccess: (newWorkout) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workouts", userId] });
+      setActiveWorkout(newWorkout.id, userId);
+      navigate(`/workout/active/${newWorkout.id}`);
     },
   });
 
@@ -132,6 +146,19 @@ export default function WorkoutDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Repeat this workout */}
+      <Button
+        data-testid="button-repeat-workout"
+        className="w-full gap-2 mb-6"
+        onClick={() => repeatWorkout.mutate()}
+        disabled={repeatWorkout.isPending}
+      >
+        <Repeat size={16} />
+        {repeatWorkout.isPending
+          ? (ru ? "Создание..." : "Creating...")
+          : (ru ? "Повторить тренировку" : "Repeat workout")}
+      </Button>
 
       {/* Exercises */}
       <h2 className="font-semibold text-base mb-3">{ru ? "Упражнения" : "Exercises"}</h2>
